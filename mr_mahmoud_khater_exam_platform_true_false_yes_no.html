@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>منصة امتحانات مستر محمود خاطر</title>
+<style>
+:root{--navy:#10243f;--navy2:#19385e;--red:#c62828;--red2:#a91f2a;--white:#fff;--bg:#f3f5f8;--line:#d9e0e8;--muted:#64748b;--green:#16834b}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:#172033;font-family:Tahoma,Arial,sans-serif}
+header{background:linear-gradient(130deg,var(--navy),var(--navy2));color:#fff;padding:25px 15px;text-align:center;border-bottom:5px solid var(--red)}
+header h1{margin:0 0 7px;font-size:27px}header p{margin:0;color:#e8edf5}
+.container{max-width:1120px;margin:24px auto;padding:0 14px}.card{background:#fff;border:1px solid var(--line);border-radius:15px;padding:21px;margin-bottom:17px;box-shadow:0 5px 20px #10243f0c}
+h2,h3{color:var(--navy)}h2{margin-top:0}.muted{color:var(--muted)}.small{font-size:13px}
+button{border:0;border-radius:9px;padding:11px 17px;background:var(--red);color:#fff;font:inherit;font-weight:bold;cursor:pointer;margin:4px}
+button:hover{filter:brightness(.94)}button.navy{background:var(--navy)}button.gray{background:#e7ebf0;color:#172033}button.green{background:var(--green)}button.outline{background:#fff;color:var(--navy);border:1px solid var(--navy)}
+input,select,textarea{width:100%;padding:11px;border:1px solid #cbd5e1;border-radius:9px;font:inherit;margin:6px 0 12px;background:#fff;color:#172033}
+textarea{min-height:90px;resize:vertical}label{display:block;font-weight:bold}label small{font-weight:normal;color:var(--muted)}
+.notice{background:#fff4f4;border-right:4px solid var(--red);padding:13px;border-radius:8px;margin:12px 0}.error{color:#b91c1c}
+.hidden{display:none!important}.flex{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}.stage{border:1px solid var(--line);border-top:4px solid var(--red);border-radius:12px;padding:15px;background:#fff}
+.tabs{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:14px}.tabs button.active{background:var(--navy)}
+.question{border:1px solid var(--line);border-radius:12px;padding:15px;margin:13px 0;background:#fff}.qtitle{font-weight:bold;direction:ltr;text-align:left;margin-bottom:10px;white-space:pre-wrap}
+.option{display:block;border:1px solid #d8dee8;border-radius:9px;padding:11px;margin:8px 0;direction:ltr;text-align:left;cursor:pointer;background:#fff}.option:hover{background:#fff7f7;border-color:#e5a4a4}.option input{width:auto;margin:0 7px 0 0}.option.correct{background:#e9f8ef;border-color:#16834b}.option.wrong{background:#fff0f0;border-color:var(--red)}
+.passage{background:#f7f9fc;border:1px solid var(--line);border-radius:10px;padding:14px;direction:ltr;text-align:left;line-height:1.8;white-space:pre-wrap}
+.topbar{position:sticky;top:0;z-index:5;background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px;box-shadow:0 4px 14px #10243f12}
+.timer{direction:ltr;color:var(--red);font-size:21px}.progress{height:8px;background:#e7ebf0;border-radius:20px;overflow:hidden;margin-top:9px}.bar{height:100%;width:0;background:var(--red)}
+.feedback{padding:10px;border-radius:8px;margin-top:9px}.good{background:#e8f7ed;color:#166534}.bad{background:#fff0f0;color:#991b1b}
+table{width:100%;border-collapse:collapse;margin:10px 0}th,td{padding:10px;border-bottom:1px solid var(--line);text-align:right;vertical-align:top}th{background:#f3f5f8;color:var(--navy)}
+.stat{padding:14px;background:#f4f6f9;border-radius:10px}.stat b{display:block;font-size:24px;color:var(--red);margin-top:5px}
+.editor{border:1px solid var(--line);padding:14px;border-radius:11px;margin:12px 0;background:#fafbfc}.editor h4{margin:0 0 10px;color:var(--navy)}
+footer{text-align:center;padding:25px;color:var(--muted)}
+@media(max-width:600px){header h1{font-size:21px}.card{padding:15px}.flex{align-items:flex-start}th,td{font-size:12px;padding:7px}}
+</style>
+</head>
+<body>
+<header><h1>منصة امتحانات مستر محمود خاطر</h1><p>اختبارات لجميع المراحل الدراسية — من الصف الرابع الابتدائي حتى الثاني الثانوي</p></header>
+<div class="container">
+<section id="home" class="card">
+ <h2>مرحبًا بك في منصة مستر محمود خاطر</h2>
+ <p>اختر طريقة الدخول للمتابعة.</p>
+ <button onclick="show('studentStage')">دخول الطالب</button>
+ <button class="navy" onclick="show('teacherLogin')">وضع المدرس</button>
+</section>
+
+<section id="studentStage" class="card hidden">
+ <h2>اختر مرحلتك الدراسية</h2><p class="muted">اختر الصف الدراسي لعرض الامتحان الذي أعدّه المدرس.</p>
+ <div id="studentStages" class="grid"></div><button class="gray" onclick="show('home')">رجوع</button>
+</section>
+
+<section id="studentLogin" class="card hidden">
+ <h2 id="studentStageTitle">بيانات الطالب</h2>
+ <label>الاسم الثلاثي<input id="studentName" type="text" placeholder="مثال: أحمد محمد علي" autocomplete="name"></label>
+ <p id="studentError" class="error"></p>
+ <div class="notice">هذا الجهاز يمكنه أداء امتحان واحد فقط على هذه النسخة. عند مغادرة صفحة الامتحان أو إغلاقها، سيتم تسليم الإجابات المحفوظة واحتساب الدرجة الحالية.</div>
+ <button onclick="startExam()">بدء الامتحان</button><button class="gray" onclick="show('studentStage')">تغيير المرحلة</button>
+</section>
+
+<section id="teacherLogin" class="card hidden">
+ <h2>دخول المدرس</h2><label>كلمة المرور<input id="teacherPassword" type="password" placeholder="كلمة مرور المدرس"></label>
+ <p id="teacherError" class="error"></p><button onclick="loginTeacher()">دخول</button><button class="gray" onclick="show('home')">رجوع</button>
+ <p class="muted small">مهم: هذه نسخة HTML محلية. كلمة المرور داخل الملف ليست حماية آمنة، والبيانات لا تنتقل تلقائيًا بين أجهزة الطلاب والمدرس.</p>
+</section>
+
+<section id="exam" class="hidden">
+ <div class="topbar"><div class="flex"><b id="studentDisplay"></b><b id="examDisplay"></b><b>المتبقي: <span id="timer" class="timer">30:00</span></b></div><div class="progress"><div id="progressBar" class="bar"></div></div><small id="progressText">تمت الإجابة عن 0 سؤال</small></div>
+ <div id="examContent"></div>
+ <div class="card" style="text-align:center"><p>عند التسليم لن تتمكن من تعديل إجاباتك.</p><button onclick="submitExam(false)">تسليم الامتحان</button></div>
+</section>
+
+<section id="result" class="card hidden"><h2>تم تسليم الامتحان</h2><p id="resultName"></p><h1 id="finalScore"></h1><p id="resultMessage"></p><button class="navy" onclick="show('home')">العودة للرئيسية</button></section>
+
+<section id="teacher" class="hidden">
+ <div class="card"><div class="flex"><div><h2>لوحة تحكم المدرس</h2><p class="muted">إدارة امتحان مستقل لكل مرحلة، ومراجعة نتائج الطلاب.</p></div><button class="gray" onclick="show('home')">تسجيل خروج</button></div>
+ <div class="tabs"><button id="tStages" class="active" onclick="teacherTab('stages')">المراحل والامتحانات</button><button id="tResults" onclick="teacherTab('results')">نتائج الطلاب</button></div>
+ <div id="teacherStages"></div><div id="teacherResults" class="hidden"></div>
+ </div>
+</section>
+</div>
+<footer>منصة امتحانات مستر محمود خاطر</footer>
+
+<script>
+const PASS="mahmoudkhater1983";
+const GRADES=["الصف الرابع الابتدائي","الصف الخامس الابتدائي","الصف السادس الابتدائي","الصف الأول الإعدادي","الصف الثاني الإعدادي","الصف الثالث الإعدادي","الصف الأول الثانوي","الصف الثاني الثانوي"];
+const DBKEY="mk_exam_data_v3",LOCKKEY="mk_exam_device_lock_v3",ACTIVEKEY="mk_exam_active_v3";
+let db=loadDB(),currentGrade="",currentExam=null,student="",answers={},remaining=1800,tick=null,submitted=false,startedAt=0;
+function freshDB(){return {exams:{},results:[]}}
+function loadDB(){try{return JSON.parse(localStorage.getItem(DBKEY))||freshDB()}catch(e){return freshDB()}}
+function saveDB(){localStorage.setItem(DBKEY,JSON.stringify(db))}
+function show(id){["home","studentStage","studentLogin","teacherLogin","exam","result","teacher"].forEach(x=>document.getElementById(x).classList.toggle("hidden",x!==id));window.scrollTo(0,0)}
+function loginTeacher(){if(document.getElementById("teacherPassword").value===PASS){document.getElementById("teacherError").textContent="";show("teacher");teacherTab("stages")}else document.getElementById("teacherError").textContent="كلمة المرور غير صحيحة."}
+function hasLock(){return !!localStorage.getItem(LOCKKEY)}
+function renderStudentStages(){const root=document.getElementById("studentStages");root.innerHTML="";GRADES.forEach(g=>{const ex=db.exams[g];const d=document.createElement("div");d.className="stage";d.innerHTML=`<h3>${esc(g)}</h3><p>${ex&&ex.questions.length?"يوجد امتحان متاح":"لا يوجد امتحان منشور حاليًا"}</p><button ${!ex||!ex.questions.length||hasLock()?"disabled":""} onclick="chooseGrade('${g}')">${hasLock()?"تم استخدام هذا الجهاز":"اختيار المرحلة"}</button>`;root.append(d)});if(hasLock()){const p=document.createElement("p");p.className="notice";p.textContent="تم استخدام هذا الجهاز لأداء امتحان بالفعل. لا يمكن بدء امتحان آخر منه.";root.prepend(p)}}
+function chooseGrade(g){currentGrade=g;const ex=db.exams[g];if(!ex||!ex.questions.length){alert("لا يوجد امتحان منشور لهذه المرحلة حتى الآن.");return}if(hasLock()){alert("هذا الجهاز أدى امتحانًا بالفعل ولا يمكنه أداء امتحان آخر.");renderStudentStages();return}document.getElementById("studentStageTitle").textContent="بيانات الطالب — "+g;document.getElementById("studentError").textContent="";show("studentLogin")}
+function stagePage(){renderStudentStages();show("studentStage")}
+function addDefaultExam(g){return {title:"امتحان "+g,duration:30,questions:[]}}
+function startExam(){const name=document.getElementById("studentName").value.trim();if(name.split(/\s+/).length<3){document.getElementById("studentError").textContent="اكتب الاسم الثلاثي كاملًا.";return}if(hasLock()){document.getElementById("studentError").textContent="هذا الجهاز استخدم الامتحان من قبل.";return}
+ db=loadDB();currentExam=db.exams[currentGrade];if(!currentExam||!currentExam.questions.length){alert("لا يوجد امتحان لهذه المرحلة.");return}
+ student=name;answers={};remaining=Math.max(1,Number(currentExam.duration)||30)*60;submitted=false;startedAt=Date.now();
+ // تثبيت قفل الجهاز قبل بدء الأسئلة؛ يمنع بدء امتحان آخر من نفس المتصفح.
+ localStorage.setItem(LOCKKEY,JSON.stringify({name:student,grade:currentGrade,startedAt}));
+ const active={name:student,grade:currentGrade,answers:{},startedAt,deadline:Date.now()+remaining*1000};localStorage.setItem(ACTIVEKEY,JSON.stringify(active));
+ document.getElementById("studentDisplay").textContent="الطالب: "+student+" — "+currentGrade;document.getElementById("examDisplay").textContent=currentExam.title;
+ buildExam();show("exam");updateProgress();updateTimer();tick=setInterval(()=>{remaining--;updateTimer();saveActive();if(remaining<=0)submitExam(true)},1000);
+}
+function buildExam(){
+ const root=document.getElementById("examContent");root.innerHTML="";
+ currentExam.questions.forEach((q,i)=>{
+ const box=document.createElement("div");box.className="card";
+ const title=document.createElement("div");title.className="qtitle";title.textContent=(i+1)+". "+q.prompt+(q.kind==="rewrite"&&q.rewriteWord?" ("+q.rewriteWord+")":"");box.append(title);
+ if(q.kind==="essay"&&q.category==="passage"&&q.material){const mat=document.createElement("div");mat.className="passage";mat.textContent=q.material;box.append(mat)}
+ if(q.kind==="essay"&&q.category==="dialogue"&&Array.isArray(q.dialogueLines)){
+   const convo=document.createElement("div");convo.className="passage";
+   q.dialogueLines.forEach((line,j)=>{const row=document.createElement("p");row.style.margin="8px 0";const sp=document.createElement("b");sp.textContent=(line.speaker||"Speaker")+": ";row.append(sp);
+     if(line.blank){const inp=document.createElement("input");inp.type="text";inp.placeholder="أكمل المحادثة";inp.value=answers[i]?.lines?.[j]||"";inp.addEventListener("input",()=>{answers[i]=answers[i]||{lines:{}};answers[i].lines[j]=inp.value;saveActive();updateProgress()});row.append(inp)}
+     else row.append(document.createTextNode(line.text||""));convo.append(row)});box.append(convo);
+ }
+ if(q.kind==="mcq"||q.kind==="truefalse"||(q.kind==="essay"&&q.category==="passage"&&q.passageMode==="mcq")){
+   const opts=q.kind==="truefalse"?["True","False"]:q.options||[];
+   opts.forEach((opt,j)=>{const l=document.createElement("label");l.className="option";const r=document.createElement("input");r.type="radio";r.name="answer"+i;r.value=j;r.checked=Number(answers[i]?.value)===j;r.addEventListener("change",()=>{answers[i]={value:j};saveActive();updateProgress()});l.append(r,document.createTextNode(opt));box.append(l)});
+ }else if(!(q.kind==="essay"&&q.category==="dialogue"&&Array.isArray(q.dialogueLines))){
+   const ta=document.createElement("textarea");ta.placeholder=q.kind==="essay"?(q.category==="dialogue"?"أكمل المحادثة في الفراغات...":"اكتب إجابتك عن القطعة..."):"اكتب الإجابة الصحيحة هنا...";ta.value=answers[i]?.text||"";ta.addEventListener("input",()=>{answers[i]={text:ta.value};saveActive();updateProgress()});box.append(ta);
+ }
+ root.append(box);
+ });
+}
+function saveActive(){const a=JSON.parse(localStorage.getItem(ACTIVEKEY)||"{}");a.answers=answers;a.remaining=remaining;localStorage.setItem(ACTIVEKEY,JSON.stringify(a))}
+function updateProgress(){const total=currentExam?.questions.length||0;const count=Object.keys(answers).filter(i=>answers[i]&&(answers[i].text?.trim()||answers[i].value!==undefined)).length;document.getElementById("progressBar").style.width=(total?count/total*100:0)+"%";document.getElementById("progressText").textContent=`تمت الإجابة عن ${count} من ${total} سؤال`}
+function updateTimer(){document.getElementById("timer").textContent=String(Math.floor(remaining/60)).padStart(2,"0")+":"+String(remaining%60).padStart(2,"0")}
+function scoreExam(){
+ let score=0,max=0,details=[];const norm=x=>String(x||"").trim().toLowerCase().replace(/[.,!?;:]/g,"");
+ currentExam.questions.forEach((q,i)=>{const a=answers[i];const pts=Math.max(0,Number(q.points)||1);max+=pts;let earned=0,correctText="";
+ if(q.kind==="mcq"||(q.kind==="essay"&&q.category==="passage"&&q.passageMode==="mcq")){const c=Number(q.correct);correctText=q.options?.[c]??"";earned=a&&Number(a.value)===c?pts:0}
+ else if(q.kind==="truefalse"){correctText=Number(q.correct)===0?"Yes (True)":"No (False)";earned=a&&Number(a.value)===Number(q.correct)?pts:0}
+ else if(q.kind==="correct"||q.kind==="rewrite"){correctText=q.modelAnswer||"تحتاج إلى مراجعة المدرس";earned=a?.text&&norm(a.text)===norm(q.modelAnswer)?pts:0}
+ else if(q.kind==="essay"&&q.category==="dialogue"&&Array.isArray(q.dialogueLines)){const blanks=q.dialogueLines.map((x,j)=>({...x,index:j})).filter(x=>x.blank);const hits=blanks.filter(x=>norm(a?.lines?.[x.index])===norm(x.answer)).length;correctText=blanks.map(x=>x.speaker+": "+x.answer).join(" | ");earned=blanks.length?Math.round(pts*hits/blanks.length):0}
+ else{correctText=q.modelAnswer||"تحتاج إلى مراجعة المدرس";if(a?.text?.trim()&&q.keywords?.length){const hits=q.keywords.filter(k=>a.text.toLowerCase().includes(k.toLowerCase())).length;earned=Math.round(pts*hits/q.keywords.length)}}
+ score+=earned;
+ let response=(q.kind==="mcq"||(q.kind==="essay"&&q.category==="passage"&&q.passageMode==="mcq"))?(a?q.options[Number(a.value)]:"لم يجب"):q.kind==="truefalse"?(a?(Number(a.value)===0?"True":"False"):"لم يجب"):q.kind==="essay"&&q.category==="dialogue"?(q.dialogueLines||[]).map((line,j)=>line.speaker+": "+(line.blank?(a?.lines?.[j]||"لم يجب"):line.text)).join(" | "):(a?.text||"لم يجب");
+ details.push({number:i+1,prompt:q.prompt+(q.kind==="rewrite"&&q.rewriteWord?" ("+q.rewriteWord+")":""),kind:q.kind,category:q.category||"",response,correct:correctText,earned,max:pts,explanation:q.explanation||"",manual:q.kind==="essay"&&q.category==="passage"&&q.passageMode!=="mcq"&&!q.keywords?.length});
+ });return {score,max,details};
+}
+function submitExam(auto){if(submitted)return;if(!auto&&!confirm("هل تريد تسليم الامتحان الآن؟"))return;submitted=true;clearInterval(tick);const result=scoreExam();db=loadDB();const rec={name:student,grade:currentGrade,examTitle:currentExam.title,score:result.score,max:result.max,details:result.details,date:new Date().toISOString(),auto};db.results.push(rec);saveDB();localStorage.removeItem(ACTIVEKEY);show("result");document.getElementById("resultName").textContent=student+" — "+currentGrade;document.getElementById("finalScore").textContent=result.score+" / "+result.max;document.getElementById("resultMessage").textContent=auto?"تم التسليم تلقائيًا وحساب الدرجة من الإجابات المحفوظة.":"تم تسليم الامتحان بنجاح."}
+window.addEventListener("beforeunload",()=>{if(!submitted&&currentExam&&student){const result=scoreExam();db=loadDB();db.results.push({name:student,grade:currentGrade,examTitle:currentExam.title,score:result.score,max:result.max,details:result.details,date:new Date().toISOString(),auto:true,interrupted:true});saveDB();localStorage.removeItem(ACTIVEKEY);}});
+function teacherTab(which){document.getElementById("teacherStages").classList.toggle("hidden",which!=="stages");document.getElementById("teacherResults").classList.toggle("hidden",which!=="results");document.getElementById("tStages").classList.toggle("active",which==="stages");document.getElementById("tResults").classList.toggle("active",which==="results");if(which==="stages")renderTeacherStages();else renderResults()}
+function renderTeacherStages(){const root=document.getElementById("teacherStages");root.innerHTML=`<p class="muted">اختر المرحلة لإنشاء امتحانها أو تعديله. يمكنك إضافة وحذف الأسئلة وتغيير نوعها ودرجاتها ومدة الامتحان.</p><div class="grid" id="gradeCards"></div>`;const grid=document.getElementById("gradeCards");GRADES.forEach(g=>{const ex=db.exams[g];const d=document.createElement("div");d.className="stage";d.innerHTML=`<h3>${esc(g)}</h3><p>${ex?esc(ex.title):"لم يتم إنشاء امتحان"}</p><p class="muted">${ex?ex.questions.length+" سؤال":"—"}</p><button onclick="editGrade('${g}')">${ex?"تعديل الامتحان":"إنشاء امتحان"}</button>`;grid.append(d)})}
+let currentEditGrade="";
+function editGrade(g){currentEditGrade=g;if(!db.exams[g])db.exams[g]=addDefaultExam(g);const ex=db.exams[g];document.getElementById("teacherStages").innerHTML=`<div class="card"><button class="gray" onclick="renderTeacherStages()">رجوع للمراحل</button><h2>إعداد امتحان ${esc(g)}</h2><label>اسم الامتحان<input id="examTitle" value="${attr(ex.title)}"></label><label>مدة الامتحان بالدقائق<input id="examDuration" type="number" min="1" max="240" value="${Number(ex.duration)||30}"></label><div id="questionEditors"></div><div class="question"><h3>إنشاء سؤال جديد</h3><p class="muted">اختر نوع السؤال الذي تريد إضافته إلى الامتحان:</p><div class="flex"><button onclick="addQuestion('mcq')">Choose</button><button onclick="addQuestion('correct')">Correct</button><button onclick="addQuestion('rewrite')">Rewrite</button><button onclick="addQuestion('truefalse')">True / False</button><button onclick="addQuestion('essay')">قطعة / محادثة / مقالي</button></div></div><button class="green" onclick="saveExam()">حفظ ونشر الامتحان</button><button class="red" onclick="deleteExam()">حذف امتحان هذه المرحلة</button></div>`;renderQuestionEditors()}
+function renderQuestionEditors(){
+ const root=document.getElementById("questionEditors");if(!root)return;
+ const qs=db.exams[currentEditGrade].questions;
+ root.innerHTML=qs.map((q,i)=>`<div class="question" id="question_${i}">
+ <div class="flex"><h3>السؤال ${i+1}</h3><button class="red" onclick="removeQuestion(${i})">حذف السؤال</button></div>
+ <label>نوع السؤال<select id="kind_${i}" onchange="changeQuestionKind(${i},this.value)">
+ <option value="mcq" ${q.kind==="mcq"?"selected":""}>Choose — اختر الإجابة الصحيحة</option>
+ <option value="truefalse" ${q.kind==="truefalse"?"selected":""}>True / False — صح أم خطأ</option>
+ <option value="correct" ${q.kind==="correct"?"selected":""}>Correct — صحح الخطأ</option><option value="rewrite" ${q.kind==="rewrite"?"selected":""}>Rewrite — أعد كتابة الجملة</option>
+ <option value="essay" ${q.kind==="essay"?"selected":""}>Essay — قطعة أو محادثة أو سؤال مقالي</option>
+ </select></label>
+ <label>نص السؤال<textarea id="prompt_${i}">${esc(q.prompt||"")}</textarea></label>
+ <label>درجة السؤال<input id="points_${i}" type="number" min="1" value="${Number(q.points)||1}"></label>
+ <div id="specific_${i}"></div></div>`).join("");
+ qs.forEach((q,i)=>renderSpecific(i,q));
+}
+function renderSpecific(i,q){
+ const root=document.getElementById("specific_"+i);if(!root)return;
+ if(q.kind==="mcq"){root.innerHTML=`<h4>الاختيارات</h4>${[0,1,2,3].map(j=>`<label>الاختيار ${j+1}<input id="opt_${i}_${j}" value="${attr(q.options?.[j]||"")}"></label>`).join("")}<label>الإجابة الصحيحة<select id="correct_${i}">${[0,1,2,3].map(j=>`<option value="${j}" ${Number(q.correct)===j?"selected":""}>الاختيار ${j+1}</option>`).join("")}</select></label><label>تفسير الإجابة<input id="explain_${i}" value="${attr(q.explanation||"")}"></label>`}
+ else if(q.kind==="truefalse"){root.innerHTML=`<p class="muted">اختر Yes إذا كانت العبارة صحيحة، واختر No إذا كانت العبارة خاطئة. الطالب لن يرى اختيارك؛ سيظهر له True و False فقط.</p><label>هل العبارة صحيحة؟<select id="correct_${i}"><option value="0" ${Number(q.correct)===0?"selected":""}>Yes</option><option value="1" ${Number(q.correct)===1?"selected":""}>No</option></select></label><label>تفسير الإجابة (اختياري)<input id="explain_${i}" value="${attr(q.explanation||"")}"></label>`}
+ else if(q.kind==="correct"||q.kind==="rewrite"){root.innerHTML=`<p class="muted">${q.kind==="correct"?"اكتب الجملة وبداخلها الكلمة الخاطئة بين قوسين.":"اكتب الجملة في نص السؤال، ثم اكتب هنا الكلمة التي سيستخدمها الطالب لإعادة كتابة الجملة."}</p>${q.kind==="rewrite"?`<label>الكلمة التي ستوضع في الجملة (تظهر للطالب بين قوسين)<input id="rewriteWord_${i}" value="${attr(q.rewriteWord||"")}"></label>`:""}<label>الإجابة الصحيحة بعد التصحيح/إعادة الكتابة<textarea id="model_${i}">${esc(q.modelAnswer||"")}</textarea></label><label>ملاحظات التصحيح<input id="explain_${i}" value="${attr(q.explanation||"")}"></label>`}
+ else{const cat=q.category||"passage";root.innerHTML=`<label>نوع السؤال المقالي<select id="category_${i}" onchange="toggleEssayFields(${i})"><option value="passage" ${cat==="passage"?"selected":""}>قطعة</option><option value="dialogue" ${cat==="dialogue"?"selected":""}>محادثة</option><option value="general" ${cat==="general"?"selected":""}>سؤال مقالي عام</option></select></label><div id="essayFields_${i}"></div>`;toggleEssayFields(i,q)}
+}
+function toggleEssayFields(i,q){
+ q=q||db.exams[currentEditGrade].questions[i];const cat=document.getElementById("category_"+i).value;const root=document.getElementById("essayFields_"+i);
+ if(cat==="dialogue"){q.dialogueLines=q.dialogueLines||[{speaker:"",text:"",blank:false},{speaker:"",text:"",blank:true,answer:""}];root.innerHTML=`<p class="muted">اكتب اسم كل متحدث وكلامه. فعّل «اترك هذا السطر للطالب» في السطر الذي تريد إخفاءه ليكمله الطالب، ثم اكتب الإجابة الصحيحة.</p><div id="dialogueLines_${i}"></div><button type="button" onclick="addDialogueLine(${i})">+ إضافة سطر للمحادثة</button>`;renderDialogueLines(i)}
+ else if(cat==="passage"){root.innerHTML=`<label>نص القطعة<textarea id="material_${i}">${esc(q.material||"")}</textarea></label><label>نوع السؤال على القطعة<select id="passageMode_${i}" onchange="togglePassageMode(${i})"><option value="mcq" ${q.passageMode==="mcq"?"selected":""}>اختياري Choose</option><option value="essay" ${q.passageMode!=="mcq"?"selected":""}>مقالي</option></select></label><div id="passageExtra_${i}"></div>`;togglePassageMode(i,q)}
+ else{root.innerHTML=`<label>نص السؤال<textarea id="material_${i}">${esc(q.material||"")}</textarea></label><label>الإجابة النموذجية<textarea id="model_${i}">${esc(q.modelAnswer||"")}</textarea></label><label>كلمات مفتاحية للتصحيح الآلي (افصل بينها بفاصلة)<input id="keywords_${i}" value="${attr((q.keywords||[]).join(","))}"></label>`}
+}
+function togglePassageMode(i,q){q=q||db.exams[currentEditGrade].questions[i];const mode=document.getElementById("passageMode_"+i).value;const root=document.getElementById("passageExtra_"+i);
+ if(mode==="mcq"){root.innerHTML=`<h4>اختيارات سؤال القطعة</h4>${[0,1,2,3].map(j=>`<label>الاختيار ${j+1}<input id="opt_${i}_${j}" value="${attr(q.options?.[j]||"")}"></label>`).join("")}<label>الإجابة الصحيحة<select id="correct_${i}">${[0,1,2,3].map(j=>`<option value="${j}" ${Number(q.correct)===j?"selected":""}>الاختيار ${j+1}</option>`).join("")}</select></label>`}
+ else{root.innerHTML=`<label>السؤال المقالي عن القطعة<textarea id="passageQuestion_${i}">${esc(q.passageQuestion||q.prompt||"")}</textarea></label><label>الإجابة النموذجية<textarea id="model_${i}">${esc(q.modelAnswer||"")}</textarea></label><label>كلمات مفتاحية للتصحيح الآلي<input id="keywords_${i}" value="${attr((q.keywords||[]).join(","))}"></label>`}
+}
+function renderDialogueLines(i){const q=db.exams[currentEditGrade].questions[i];const root=document.getElementById("dialogueLines_"+i);if(!root)return;root.innerHTML=(q.dialogueLines||[]).map((line,j)=>`<div class="question"><label>اسم المتحدث<input id="dlgSpeaker_${i}_${j}" value="${attr(line.speaker||"")}"></label><label>كلام المتحدث<input id="dlgText_${i}_${j}" value="${attr(line.text||"")}" ${line.blank?"disabled":""}></label><label><input type="checkbox" id="dlgBlank_${i}_${j}" ${line.blank?"checked":""} onchange="toggleDialogueBlank(${i},${j},this.checked)"> اترك هذا السطر للطالب ليكمله</label><label>الإجابة الصحيحة لهذا السطر<input id="dlgAnswer_${i}_${j}" value="${attr(line.answer||"")}" ${line.blank?"":"disabled"}></label><button type="button" class="red" onclick="removeDialogueLine(${i},${j})">حذف السطر</button></div>`).join("")}
+function toggleDialogueBlank(i,j,v){db.exams[currentEditGrade].questions[i].dialogueLines[j].blank=v;renderDialogueLines(i)}
+function addDialogueLine(i){db.exams[currentEditGrade].questions[i].dialogueLines.push({speaker:"",text:"",blank:false,answer:""});renderDialogueLines(i)}
+function removeDialogueLine(i,j){db.exams[currentEditGrade].questions[i].dialogueLines.splice(j,1);renderDialogueLines(i)}
+function changeQuestionKind(i,kind){const q=db.exams[currentEditGrade].questions[i];q.kind=kind;if(kind==="mcq"){q.options=q.options||["","","",""];q.correct=Number(q.correct)||0}else if(kind==="truefalse"){q.correct=Number(q.correct)||0}else if(kind==="essay"){q.category=q.category||"passage";q.passageMode=q.passageMode||"mcq";q.options=q.options||["","","",""];q.dialogueLines=q.dialogueLines||[]}renderSpecific(i,q)}
+function addQuestion(kind="mcq"){const q={kind,prompt:"",points:1,explanation:""};if(kind==="mcq")Object.assign(q,{options:["","","",""],correct:0});if(kind==="truefalse")q.correct=0;if(kind==="essay")Object.assign(q,{category:"passage",passageMode:"mcq",options:["","","",""],correct:0,material:"",keywords:[],modelAnswer:"",dialogueLines:[]});db.exams[currentEditGrade].questions.push(q);renderQuestionEditors()}
+function removeQuestion(i){db.exams[currentEditGrade].questions.splice(i,1);renderQuestionEditors()}
+function saveExam(){
+ const ex=db.exams[currentEditGrade];ex.title=document.getElementById("examTitle").value.trim()||"امتحان "+currentEditGrade;ex.duration=Math.max(1,Math.min(240,Number(document.getElementById("examDuration").value)||30));
+ for(let i=0;i<ex.questions.length;i++){const q=ex.questions[i];q.prompt=document.getElementById("prompt_"+i).value.trim();q.points=Math.max(1,Number(document.getElementById("points_"+i).value)||1);
+ if(q.kind==="mcq"){q.options=[0,1,2,3].map(j=>document.getElementById(`opt_${i}_${j}`).value.trim());q.correct=Number(document.getElementById("correct_"+i).value);q.explanation=document.getElementById("explain_"+i).value}
+ else if(q.kind==="truefalse"){q.correct=Number(document.getElementById("correct_"+i).value);q.explanation=document.getElementById("explain_"+i).value}
+ else if(q.kind==="correct"||q.kind==="rewrite"){q.modelAnswer=document.getElementById("model_"+i).value.trim();if(q.kind==="rewrite"){q.rewriteWord=document.getElementById("rewriteWord_"+i).value.trim();if(!q.rewriteWord){alert("اكتب الكلمة التي ستوضع بين القوسين في سؤال Rewrite.");return}}q.explanation=document.getElementById("explain_"+i)?.value||""}
+ else{q.category=document.getElementById("category_"+i).value;
+ if(q.category==="dialogue"){q.dialogueLines=(q.dialogueLines||[]).map((line,j)=>({speaker:document.getElementById(`dlgSpeaker_${i}_${j}`)?.value.trim()||"",text:document.getElementById(`dlgText_${i}_${j}`)?.value.trim()||"",blank:!!document.getElementById(`dlgBlank_${i}_${j}`)?.checked,answer:document.getElementById(`dlgAnswer_${i}_${j}`)?.value.trim()||""}));if(!q.dialogueLines.some(x=>x.blank&&x.answer)){alert("حدد سطرًا واحدًا على الأقل ليكمله الطالب واكتب إجابته.");return}}
+ else if(q.category==="passage"){q.material=document.getElementById("material_"+i).value.trim();q.passageMode=document.getElementById("passageMode_"+i).value;if(q.passageMode==="mcq"){q.options=[0,1,2,3].map(j=>document.getElementById(`opt_${i}_${j}`).value.trim());q.correct=Number(document.getElementById("correct_"+i).value)}else{q.passageQuestion=document.getElementById("passageQuestion_"+i).value.trim();q.prompt=q.passageQuestion||q.prompt;q.modelAnswer=document.getElementById("model_"+i).value;q.keywords=document.getElementById("keywords_"+i).value.split(",").map(x=>x.trim()).filter(Boolean)}if(!q.material){alert("اكتب نص القطعة.");return}}
+ else{q.material=document.getElementById("material_"+i).value.trim();q.modelAnswer=document.getElementById("model_"+i).value;q.keywords=document.getElementById("keywords_"+i).value.split(",").map(x=>x.trim()).filter(Boolean)}
+ }}
+ if(ex.questions.some(q=>!q.prompt)){alert("اكتب نص كل سؤال قبل الحفظ.");return}
+ if(ex.questions.some(q=>(q.kind==="mcq"||(q.kind==="essay"&&q.category==="passage"&&q.passageMode==="mcq"))&&(q.options.filter(Boolean).length<2||!q.options[q.correct]))){alert("أكمل الاختيارات وحدد الإجابة الصحيحة.");return}
+ saveDB();alert("تم حفظ الامتحان لهذه المرحلة.");renderTeacherStages();
+}
+function deleteExam(){if(confirm("حذف امتحان هذه المرحلة؟")){delete db.exams[currentEditGrade];saveDB();renderTeacherStages()}}
+function renderResults(){
+ const root=document.getElementById("teacherResults");const rows=db.results||[];
+ if(!rows.length){root.innerHTML="<p>لا توجد نتائج بعد.</p>";return}
+ const stages=[...new Set([...GRADES,...rows.map(r=>r.grade)])];
+ let html=`<div class="flex"><h3>نتائج الطلاب حسب المرحلة</h3><button class="outline" onclick="exportResults()">تصدير CSV</button></div>`;
+ stages.forEach((grade,stageIndex)=>{
+   const grouped=rows.map((r,index)=>({r,index})).filter(x=>x.r.grade===grade);
+   if(!grouped.length)return;
+   html+=`<section class="card" style="margin:14px 0"><h3>${esc(grade)}</h3><p class="muted">عدد الطلاب: ${grouped.length}</p><div style="overflow-x:auto"><table><thead><tr><th>الطالب</th><th>الامتحان</th><th>الدرجة</th><th>التاريخ</th><th>التقرير</th></tr></thead><tbody>`;
+   grouped.forEach(({r,index})=>{html+=`<tr><td>${esc(r.name)}</td><td>${esc(r.examTitle)}</td><td>${r.score}/${r.max}</td><td>${new Date(r.date).toLocaleString("ar-EG")}</td><td><button onclick="report(${index})">عرض</button></td></tr>`});
+   html+=`</tbody></table></div></section>`;
+ });
+ root.innerHTML=html;
+}
+function report(i){const r=db.results[i];let h=`<div class="card"><button class="gray" onclick="renderResults()">رجوع</button><h3>تقرير ${esc(r.name)} — ${esc(r.grade)}</h3><p>النتيجة: <b>${r.score}/${r.max}</b></p>`;r.details.forEach(d=>h+=`<div class="question"><b>${d.number}. ${esc(d.prompt)}</b><p>نوع السؤال: ${d.kind==="mcq"?"Choose":d.kind==="truefalse"?"True / False":d.kind==="correct"?"Correct":d.kind==="rewrite"?"Rewrite":"مقالي — "+esc(d.category)}</p><p>إجابة الطالب: ${esc(d.response)}</p><p>الإجابة الصحيحة/النموذجية: ${esc(d.correct||"غير محددة")}</p><p>الدرجة: ${d.earned}/${d.max}</p>${d.explanation?`<p class="muted">${esc(d.explanation)}</p>`:""}${d.manual?`<p class="error small">هذه إجابة مقالية تحتاج إلى مراجعة المدرس؛ لم تُمنح درجة آلية.</p>`:""}</div>`);h+="</div>";document.getElementById("teacherResults").innerHTML=h}
+function exportResults(){const rows=[["الاسم","المرحلة","الامتحان","الدرجة","الدرجة النهائية","التاريخ"],...db.results.map(r=>[r.name,r.grade,r.examTitle,r.score,r.max,r.date])];const csv="\uFEFF"+rows.map(row=>row.map(v=>'"'+String(v??"").replace(/"/g,'""')+'"').join(",")).join("\n");const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"}));a.download="نتائج-الطلاب.csv";a.click();URL.revokeObjectURL(a.href)}
+function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}function attr(s){return esc(s)}
+document.getElementById("home").querySelector("button").addEventListener("click",stagePage);
+</script>
+</body></html>
