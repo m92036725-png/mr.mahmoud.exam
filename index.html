@@ -51,7 +51,7 @@ footer{text-align:center;padding:25px;color:var(--muted)}
  <h2 id="studentStageTitle">بيانات الطالب</h2>
  <label>الاسم الثلاثي<input id="studentName" type="text" placeholder="مثال: أحمد محمد علي" autocomplete="name"></label>
  <p id="studentError" class="error"></p>
- <div class="notice">هذا الجهاز يمكنه أداء امتحان واحد فقط على هذه النسخة. عند مغادرة صفحة الامتحان أو إغلاقها، سيتم تسليم الإجابات المحفوظة واحتساب الدرجة الحالية.</div>
+ <div class="notice">هذا الجهاز يمكنه أداء امتحان واحد فقط كل 24 ساعة على هذه النسخة. عند مغادرة صفحة الامتحان أو إغلاقها، سيتم تسليم الإجابات المحفوظة واحتساب الدرجة الحالية.</div>
  <button onclick="startExam()">بدء الامتحان</button><button class="gray" onclick="show('studentStage')">تغيير المرحلة</button>
 </section>
 
@@ -88,7 +88,26 @@ function loadDB(){try{return JSON.parse(localStorage.getItem(DBKEY))||freshDB()}
 function saveDB(){localStorage.setItem(DBKEY,JSON.stringify(db))}
 function show(id){["home","studentStage","studentLogin","teacherLogin","exam","result","teacher"].forEach(x=>document.getElementById(x).classList.toggle("hidden",x!==id));window.scrollTo(0,0)}
 function loginTeacher(){if(document.getElementById("teacherPassword").value===PASS){document.getElementById("teacherError").textContent="";show("teacher");teacherTab("stages")}else document.getElementById("teacherError").textContent="كلمة المرور غير صحيحة."}
-function hasLock(){return !!localStorage.getItem(LOCKKEY)}
+function hasLock(){
+const raw=localStorage.getItem(LOCKKEY);
+if(!raw)return false;
+
+try{
+const lock=JSON.parse(raw);
+const elapsed=Date.now()-Number(lock.startedAt);
+const limit=24*60*60*1000;
+
+if(!lock.startedAt || elapsed>=limit){
+localStorage.removeItem(LOCKKEY);
+return false;
+}
+
+return true;
+}catch(e){
+localStorage.removeItem(LOCKKEY);
+return false;
+}
+}
 function renderStudentStages(){const root=document.getElementById("studentStages");root.innerHTML="";GRADES.forEach(g=>{const ex=db.exams[g];const d=document.createElement("div");d.className="stage";d.innerHTML=`<h3>${esc(g)}</h3><p>${ex&&ex.questions.length?"يوجد امتحان متاح":"لا يوجد امتحان منشور حاليًا"}</p><button ${!ex||!ex.questions.length||hasLock()?"disabled":""} onclick="chooseGrade('${g}')">${hasLock()?"تم استخدام هذا الجهاز":"اختيار المرحلة"}</button>`;root.append(d)});if(hasLock()){const p=document.createElement("p");p.className="notice";p.textContent="تم استخدام هذا الجهاز لأداء امتحان بالفعل. لا يمكن بدء امتحان آخر منه.";root.prepend(p)}}
 function chooseGrade(g){currentGrade=g;const ex=db.exams[g];if(!ex||!ex.questions.length){alert("لا يوجد امتحان منشور لهذه المرحلة حتى الآن.");return}if(hasLock()){alert("هذا الجهاز أدى امتحانًا بالفعل ولا يمكنه أداء امتحان آخر.");renderStudentStages();return}document.getElementById("studentStageTitle").textContent="بيانات الطالب — "+g;document.getElementById("studentError").textContent="";show("studentLogin")}
 function stagePage(){renderStudentStages();show("studentStage")}
