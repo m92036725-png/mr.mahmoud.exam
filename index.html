@@ -474,4 +474,501 @@ q.querySelector(".wrongWord").value=words[index]||"";
 q.querySelectorAll(".word-choice").forEach((b,i)=>b.classList.toggle("selected",i===index));
 }
 function addDialogLine(id){
-  
+ let box=document.getElementById("dialogLines_"+id),n=box.children.length,line=document.createElement("div");line.className="dialog-line";
+line.innerHTML=`<div class="row"><b>سطر الحوار ${n+1}</b><button type="button" class="danger" onclick="this.closest('.dialog-line').remove()">حذف</button></div><label>المتحدث</label><select class="lineSpeaker"><option value="A">الشخص الأول</option><option value="B">الشخص الثاني</option></select><label>نص الحوار</label><textarea class="lineText"></textarea><label class="option"><input type="checkbox" class="lineBlank" onchange="this.closest('.dialog-line').querySelector('.blankSettings').classList.toggle('hidden',!this.checked)">هذا السطر مكان إجابة الطالب (فراغ)</label><div class="blankSettings hidden"><label>الاختيارات (كل اختيار في سطر)</label><textarea class="lineOptions"></textarea><label>رقم الإجابة الصحيحة</label><input class="lineCorrect" type="number" min="1" value="1"><label>درجة هذا الفراغ</label><input class="linePoints" type="number" min="0.5" step="0.5" value="1"></div>`;
+box.appendChild(line);
+}
+function addPassageQuestion(id){
+let box=document.getElementById("passageQuestions_"+id),n=box.children.length,q=document.createElement("div");q.className="builder-box passage-sub";
+q.innerHTML=`<div class="row"><b>سؤال القطعة ${n+1}</b><button type="button" class="danger" onclick="this.closest('.passage-sub').remove()">حذف</button></div><label>نوع السؤال</label><select class="subType" onchange="this.closest('.passage-sub').querySelector('.subMcq').classList.toggle('hidden',this.value!=='mcq');this.closest('.passage-sub').querySelector('.subEssay').classList.toggle('hidden',this.value!=='essay')"><option value="mcq">اختياري</option><option value="essay">مقالي</option></select><label>السؤال</label><textarea class="subText"></textarea><label>الدرجة</label><input class="subPoints" type="number" min="0.5" step="0.5" value="1"><div class="subMcq"><label>الاختيارات (كل اختيار في سطر)</label><textarea class="subOptions"></textarea><label>رقم الإجابة الصحيحة</label><input class="subCorrect" type="number" min="1" value="1"></div><div class="subEssay hidden"><label>الإجابة النموذجية</label><textarea class="subExpected"></textarea></div>`;
+box.appendChild(q);
+}
+
+function publishExam(){
+let title=document.getElementById("examTitle").value.trim(),grade=document.getElementById("examGrade").value,durationByGrade={};
+if(grade==="الكل")document.querySelectorAll(".gradeDuration").forEach(x=>durationByGrade[x.dataset.grade]=Number(x.value));
+else durationByGrade[grade]=Number(document.getElementById("examDuration").value);
+let questions=[],invalid=false;
+document.querySelectorAll("#questionBuilder .question").forEach(q=>{
+let type=q.querySelector(".qtype").value,obj={type};
+if(type==="mcq"){
+obj.text=q.querySelector(".qtext").value.trim();obj.points=Number(q.querySelector(".qpoints").value);obj.options=q.querySelector(".qoptions").value.split("\n").map(x=>x.trim()).filter(Boolean);obj.correct=Number(q.querySelector(".qcorrect").value);
+if(!obj.text||obj.points<=0||obj.options.length<2||obj.correct<1||obj.correct>obj.options.length)invalid=true;
+}
+if(type==="correct"){
+obj.sentence=q.querySelector(".correctSentence").value.trim();obj.wrongWord=q.querySelector(".wrongWord").value.trim();obj.correctWord=q.querySelector(".correctWord").value.trim();obj.points=Number(q.querySelector(".qpoints").value);
+if(!obj.sentence||!obj.wrongWord||!obj.correctWord||obj.points<=0)invalid=true;
+}
+if(type==="rewrite"){
+obj.originalWord=q.querySelector(".originalWord").value.trim();obj.replacementWord=q.querySelector(".replacementWord").value.trim();obj.expected=q.querySelector(".rewriteExpected").value.trim();obj.points=Number(q.querySelector(".qpoints").value);
+if(!obj.originalWord||!obj.replacementWord||!obj.expected||obj.points<=0)invalid=true;
+}
+if(type==="dialog"){
+obj.personA=q.querySelector(".personA").value.trim();obj.personB=q.querySelector(".personB").value.trim();obj.lines=[];
+q.querySelectorAll(".dialog-line").forEach(line=>{
+let blank=line.querySelector(".lineBlank").checked,item={speaker:line.querySelector(".lineSpeaker").value,text:line.querySelector(".lineText").value.trim(),blank,options:[],correct:1,points:0};
+if(blank){item.options=line.querySelector(".lineOptions").value.split("\n").map(x=>x.trim()).filter(Boolean);item.correct=Number(line.querySelector(".lineCorrect").value);item.points=Number(line.querySelector(".linePoints").value);if(item.options.length<2||item.correct<1||item.correct>item.options.length||item.points<=0)invalid=true;}
+else if(!item.text)invalid=true;
+obj.lines.push(item);
+});
+if(!obj.personA||!obj.personB||!obj.lines.length||!obj.lines.some(x=>x.blank))invalid=true;
+}
+if(type==="passage"){
+obj.passage=q.querySelector(".passageText").value.trim();obj.subquestions=[];
+q.querySelectorAll(".passage-sub").forEach(sub=>{
+let st=sub.querySelector(".subType").value,item={type:st,text:sub.querySelector(".subText").value.trim(),points:Number(sub.querySelector(".subPoints").value)};
+if(st==="mcq"){item.options=sub.querySelector(".subOptions").value.split("\n").map(x=>x.trim()).filter(Boolean);item.correct=Number(sub.querySelector(".subCorrect").value);if(item.options.length<2||item.correct<1||item.correct>item.options.length)invalid=true;}
+else{item.expected=sub.querySelector(".subExpected").value.trim();if(!item.expected)invalid=true;}
+if(!item.text||item.points<=0)invalid=true;obj.subquestions.push(item);
+});
+if(!obj.passage||!obj.subquestions.length)invalid=true;
+}
+questions.push(obj);
+});
+let invalidDuration=Object.values(durationByGrade).some(x=>!Number.isFinite(x)||x<1);
+if(!title||invalidDuration||!questions.length||invalid){document.getElementById("examError").textContent="راجع البيانات: تأكد من كتابة جميع الأسئلة والاختيارات والإجابات الصحيحة والدرجات.";return;}
+data.exams.unshift({id:"exam_"+Date.now(),title,grade,duration:durationByGrade[grade]||30,durationByGrade,questions,published:true,visible:document.getElementById("resultVisibility").value==="yes"});
+save();document.getElementById("examTitle").value="";document.getElementById("questionBuilder").innerHTML="";questionNumber=0;document.getElementById("examError").textContent="تم نشر الامتحان بنجاح.";renderTeacher();
+}
+function getDuration(exam,grade){return Number(exam.durationByGrade?.[grade]||exam.duration||30);}
+function getLeaves(exam){
+let leaves=[];
+exam.questions.forEach((q,i)=>{
+if(q.type==="dialog")(q.lines||[]).forEach((line,j)=>{if(line.blank)leaves.push({key:`${i}_${j}`,parent:i,index:j,type:"mcq",points:Number(line.points)||1,options:line.options||[],correct:line.correct,kind:"dialog"});});
+else if(q.type==="passage")(q.subquestions||[]).forEach((sub,j)=>leaves.push({key:`${i}_${j}`,parent:i,index:j,type:sub.type==="mcq"?"mcq":"essay",text:sub.text,points:sub.points,options:sub.options||[],correct:sub.correct,expected:sub.expected,kind:"passage"}));
+else leaves.push({key:String(i),parent:i,index:0,type:q.type,text:q.text||q.sentence||"",points:q.points,options:q.options||[],correct:q.correct,expected:q.expected,kind:q.type});
+});
+return leaves;
+}
+function startExam(id){
+let e=data.exams.find(x=>x.id===id);if(!e||!data.student)return;
+if(!e.published||(e.grade!=="الكل"&&e.grade!==data.student.grade)){alert("هذا الامتحان غير متاح لمرحلتك.");return;}
+if(data.attempts.some(a=>a.examId===id&&a.studentId===data.student.id)){alert("لقد أديت هذا الامتحان بالفعل.");return;}
+activeExam=e;endTime=Date.now()+getDuration(e,data.student.grade)*60000;submitting=false;
+document.querySelectorAll("main>section").forEach(x=>x.classList.add("hidden"));document.getElementById("takingExam").classList.remove("hidden");document.getElementById("takingTitle").textContent=e.title;
+let box=document.getElementById("examQuestions");box.innerHTML="";
+e.questions.forEach((q,i)=>{
+let html="";
+if(q.type==="mcq"){html+=`<b>${i+1}. ${esc(q.text)}</b><p class="small">${q.points} درجة</p>`;html+=q.options.map((o,j)=>`<label class="option"><input type="radio" name="answer_${i}" value="${j+1}">${esc(o)}</label>`).join("");}
+if(q.type==="correct")html+=`<b>${i+1}. Correct</b><p>${esc(q.sentence)}</p><p class="small">اكتب الكلمة الصحيحة بدلاً من الكلمة التي بها الخطأ.</p><input id="answer_${i}" placeholder="اكتب الكلمة الصحيحة هنا"><p class="small">${q.points} درجة</p>`;
+if(q.type==="rewrite")html+=`<b>${i+1}. Rewrite</b><p>استخدم كلمة: <b>${esc(q.replacementWord)}</b></p><p>الكلمة الأصلية: ${esc(q.originalWord)}</p><p class="small">اكتب الجملة كاملة بعد إعادة الصياغة.</p><textarea id="answer_${i}"></textarea><p class="small">${q.points} درجة</p>`;
+if(q.type==="dialog"){
+html+=`<h3>${i+1}. Dialog</h3><div class="notice">Complete the following dialogue:</div><div class="builder-box">`;
+(q.lines||[]).forEach((line,j)=>{let speaker=line.speaker==="A"?q.personA:q.personB;html+=`<p><span class="dialog-person">${esc(speaker)}:</span> `;if(line.blank){html+="<br><b>Choose the correct answer:</b></p>";html+=line.options.map((o,k)=>`<label class="option"><input type="radio" name="answer_${i}_${j}" value="${k+1}">${esc(o)}</label>`).join("");}else html+=`${esc(line.text)}</p>`;});
+html+="</div>";
+}
+if(q.type==="passage"){
+html+=`<h3>${i+1}. Passage</h3><div class="passage">${esc(q.passage).replace(/\n/g,"<br>")}</div>`;
+(q.subquestions||[]).forEach((sub,j)=>{html+=`<div class="question"><b>${j+1}. ${esc(sub.text)}</b><p class="small">${sub.points} درجة</p>`;if(sub.type==="mcq")html+=sub.options.map((o,k)=>`<label class="option"><input type="radio" name="answer_${i}_${j}" value="${k+1}">${esc(o)}</label>`).join("");else html+=`<textarea id="answer_${i}_${j}"></textarea>`;html+="</div>";});
+}
+box.innerHTML+=`<div class="question">${html}</div>`;
+});
+clearInterval(timerInterval);timerInterval=setInterval(updateTimer,1000);updateTimer();
+}
+function getStudentAnswers(){
+let answers=[];
+activeExam.questions.forEach((q,i)=>{
+if(q.type==="dialog")answers.push((q.lines||[]).map((line,j)=>line.blank?(document.querySelector(`input[name="answer_${i}_${j}"]:checked`)?.value||""):""));
+else if(q.type==="passage")answers.push((q.subquestions||[]).map((sub,j)=>sub.type==="mcq"?(document.querySelector(`input[name="answer_${i}_${j}"]:checked`)?.value||""):(document.getElementById(`answer_${i}_${j}`)?.value||"")));
+else if(q.type==="mcq")answers.push(document.querySelector(`input[name="answer_${i}"]:checked`)?.value||"");
+else answers.push(document.getElementById("answer_"+i)?.value||"");
+});
+return answers;
+}
+function updateTimer(){
+if(!activeExam)return;let seconds=Math.max(0,Math.ceil((endTime-Date.now())/1000));
+document.getElementById("timer").textContent=String(Math.floor(seconds/60)).padStart(2,"0")+":"+String(seconds%60).padStart(2,"0");
+if(seconds===0)submitExam(true);
+}
+function normalizeAnswer(v){return String(v||"").trim().toLowerCase().replace(/\s+/g," ");}
+function submitExam(auto=false){
+if(!activeExam||submitting)return;submitting=true;clearInterval(timerInterval);
+let exam=activeExam,s=data.student;if(!s){submitting=false;return;}
+let answers=getStudentAnswers(),leaves=getLeaves(exam),score=0,total=0,manualScores=[];
+leaves.forEach(leaf=>{
+total+=Number(leaf.points)||0;let answer="";
+if(leaf.kind==="dialog")answer=answers[leaf.parent][leaf.index];
+else if(leaf.kind==="passage")answer=answers[leaf.parent][leaf.index];
+else answer=answers[leaf.parent];
+let earned=null;
+if(leaf.type==="mcq")earned=Number(answer)===Number(leaf.correct)?leaf.points:0;
+else if(leaf.kind==="correct"){let q=exam.questions[leaf.parent];earned=normalizeAnswer(answer)===normalizeAnswer(q.correctWord)?leaf.points:0;}
+else if(leaf.kind==="rewrite"){let q=exam.questions[leaf.parent];earned=normalizeAnswer(answer)===normalizeAnswer(q.expected)?leaf.points:0;}
+manualScores.push(earned);if(earned!==null)score+=earned;
+});
+data.attempts.push({id:"attempt_"+Date.now(),examId:exam.id,studentId:s.id,studentName:s.name,studentGrade:s.grade,title:exam.title,score,total,answers,manualScores,visible:exam.visible,submittedAt:Date.now(),automatic:auto,reviewed:manualScores.every(x=>x!==null)});
+save();try{localStorage.removeItem("exam_progress")}catch(e){}
+activeExam=null;submitting=false;
+if(!auto){show("student");alert("تم تسليم الامتحان وحفظ إجاباتك. الأسئلة المقالية تنتظر تصحيح المدرس.");}
+}
+function getAttemptScore(a){
+if(Number.isFinite(Number(a.finalScore)))return Number(a.finalScore);
+let score=0;if(Array.isArray(a.manualScores))a.manualScores.forEach(v=>{if(v!==null&&v!==undefined)score+=Number(v)||0;});else score=Number(a.score)||0;return score;
+}
+
+function renderTeacher(){
+if(sessionStorage.getItem("teacher")!=="yes"){show("teacherLogin");return;}
+document.getElementById("studentCount").textContent=data.students.length;
+document.getElementById("examCount").textContent=data.exams.length;
+document.getElementById("attemptCount").textContent=data.attempts.length;
+document.getElementById("messageCount").textContent=data.messages.length;
+document.getElementById("teacherExams").innerHTML=data.exams.map(e=>`<div class="exam"><h3>${esc(e.title)}</h3><p>${esc(e.grade)} • ${e.grade==="الكل"?"مدة مختلفة حسب المرحلة":getDuration(e,e.grade)+" دقيقة"}</p><p>عدد الأسئلة: ${e.questions.length}</p><button class="secondary" onclick="toggleExam('${e.id}')">${e.published?"إيقاف النشر":"إعادة النشر"}</button> <button class="danger" onclick="deleteExam('${e.id}')">حذف</button></div>`).join("")||"لا توجد امتحانات.";
+document.getElementById("teacherResults").innerHTML=data.students.map(s=>{
+let attempts=data.attempts.filter(a=>a.studentId===s.id);
+return `<div class="exam"><div class="row"><h3>${esc(s.name)}</h3><span class="tag">${esc(s.grade)}</span></div><p>رقم ولي الأمر: ${esc(s.phone)}</p><p>تاريخ التسجيل: ${new Date(s.createdAt).toLocaleDateString("ar-EG")}</p><p>عدد الامتحانات: ${attempts.length}</p><button class="secondary" onclick="viewStudentProfile('${s.id}')">فتح الملف الشخصي الكامل</button>${attempts.map(a=>`<div class="notice"><b>${esc(a.title)}</b><br>الدرجة الحالية: ${getAttemptScore(a)}/${a.total}<br>${a.reviewed?"تم التصحيح":"توجد إجابات تحتاج إلى مراجعة"}<br>${new Date(a.submittedAt).toLocaleString("ar-EG")}<div class="actions"><button class="secondary" onclick="reviewAttempt('${a.id}')">عرض الإجابات وتصحيحها</button><button class="secondary" onclick="editAttemptScore('${a.id}')">تعديل الدرجة النهائية</button><button class="secondary" onclick="toggleResult('${a.id}')">${a.visible?"إخفاء النتيجة":"إظهار النتيجة"}</button></div></div>`).join("")}</div>`;
+}).join("")||"لا يوجد طلاب.";
+document.getElementById("teacherMessages").innerHTML=data.messages.map(m=>`<div class="exam"><div class="row"><b>${esc(m.name||"طالب")}</b><span class="tag">${new Date(m.createdAt||Date.now()).toLocaleString("ar-EG")}</span></div><h4>${esc(m.subject)}</h4><p>${esc(m.message)}</p><button class="danger" onclick="deleteMessage('${m.id}')">حذف الرسالة</button></div>`).join("")||"لا توجد رسائل أو شكاوى.";
+}
+function editAttemptScore(id){
+let a=data.attempts.find(x=>x.id===id);if(!a)return;
+let value=prompt("اكتب الدرجة النهائية الجديدة من 0 إلى "+a.total,getAttemptScore(a));if(value===null)return;
+value=value.trim();let n=Number(value);
+if(value===""||!Number.isFinite(n)||n<0||n>a.total){alert("أدخل درجة صحيحة لا تقل عن صفر ولا تزيد عن الدرجة النهائية.");return;}
+a.finalScore=n;a.score=n;a.reviewed=true;a.visible=true;save();renderTeacher();alert("تم تعديل الدرجة النهائية بنجاح.");
+}
+function viewStudentProfile(id){
+let s=data.students.find(x=>x.id===id);if(!s)return;let attempts=data.attempts.filter(a=>a.studentId===id);
+document.getElementById("reviewContent").innerHTML=`<h2>الملف الشخصي للطالب</h2><div class="exam"><p><b>الاسم:</b> ${esc(s.name)}</p><p><b>رقم ولي الأمر:</b> ${esc(s.phone)}</p><p><b>الصف:</b> ${esc(s.grade)}</p><p><b>تاريخ التسجيل:</b> ${new Date(s.createdAt).toLocaleString("ar-EG")}</p><p><b>عدد المحاولات:</b> ${attempts.length}</p></div><h3>سجل الامتحانات</h3>${attempts.map(a=>`<div class="exam"><b>${esc(a.title)}</b><p>الدرجة: ${getAttemptScore(a)}/${a.total}</p><p>تاريخ التسليم: ${new Date(a.submittedAt).toLocaleString("ar-EG")}</p><button class="secondary" onclick="reviewAttempt('${a.id}')">عرض الإجابات</button> <button class="secondary" onclick="editAttemptScore('${a.id}')">تعديل الدرجة</button></div>`).join("")||"<p>لا توجد امتحانات.</p>"}`;
+show("reviewAttempt");
+}
+function getAnswerForLeaf(a,leaf){
+if(leaf.kind==="dialog")return a.answers?.[leaf.parent]?.[leaf.index]||"";
+if(leaf.kind==="passage")return a.answers?.[leaf.parent]?.[leaf.index]||"";
+return a.answers?.[leaf.parent]||"";
+}
+function reviewAttempt(id){
+let a=data.attempts.find(x=>x.id===id);if(!a)return;let e=data.exams.find(x=>x.id===a.examId);if(!e){alert("بيانات الامتحان غير موجودة.");return;}
+let leaves=getLeaves(e);if(!Array.isArray(a.manualScores))a.manualScores=leaves.map(()=>null);
+let html=`<h3>الطالب: ${esc(a.studentName)}</h3><p>الامتحان: ${esc(a.title)}</p><p>الصف: ${esc(a.studentGrade||"غير محدد")}</p><p>تاريخ التسليم: ${new Date(a.submittedAt).toLocaleString("ar-EG")}</p><hr>`;
+leaves.forEach((leaf,i)=>{
+let answer=getAnswerForLeaf(a,leaf),earned=a.manualScores[i],model="";
+if(leaf.kind==="dialog"){let line=e.questions[leaf.parent].lines[leaf.index];model=line.options?.[Number(line.correct)-1]||"";}
+else if(leaf.kind==="passage"){let sub=e.questions[leaf.parent].subquestions[leaf.index];model=sub.expected||sub.options?.[Number(sub.correct)-1]||"";}
+else if(leaf.kind==="correct")model=e.questions[leaf.parent].correctWord;
+else if(leaf.kind==="rewrite")model=e.questions[leaf.parent].expected;
+else if(leaf.type==="mcq")model=leaf.options?.[Number(leaf.correct)-1]||"";
+html+=`<div class="answer-review"><h4>السؤال ${i+1}: ${esc(leaf.kind)}</h4><p>${esc(leaf.text||"")}</p><p><b>إجابة الطالب:</b></p><div class="notice">${esc(answer||"لم تتم الإجابة")}</div>${model?`<p><b>الإجابة النموذجية:</b> ${esc(model)}</p>`:""}<p>الدرجة الكلية: ${leaf.points}</p><label>الدرجة التي يستحقها الطالب</label><input class="earnedScore" data-index="${i}" type="number" min="0" max="${leaf.points}" step="0.5" value="${earned===null||earned===undefined?"":earned}" placeholder="اكتب الدرجة"></div>`;
+});
+html+=`<div class="notice"><b>الدرجة النهائية بعد التصحيح:</b> <span id="reviewTotal">${getAttemptScore(a)}</span> / ${a.total}</div><button class="primary" onclick="saveReview('${a.id}')">حفظ التصحيح والدرجات</button> <button class="secondary" onclick="show('teacher')">العودة</button>`;
+document.getElementById("reviewContent").innerHTML=html;show("reviewAttempt");
+document.querySelectorAll(".earnedScore").forEach(input=>input.addEventListener("input",()=>{let sum=0;document.querySelectorAll(".earnedScore").forEach(x=>sum+=Number(x.value)||0);document.getElementById("reviewTotal").textContent=sum;}));
+}
+function saveReview(id){
+let a=data.attempts.find(x=>x.id===id);if(!a)return;let e=data.exams.find(x=>x.id===a.examId);if(!e)return;
+let scores=a.manualScores||[],valid=true;
+document.querySelectorAll(".earnedScore").forEach(input=>{
+let i=Number(input.dataset.index),leaf=getLeaves(e)[i],value=input.value.trim();
+if(value===""){valid=false;return;}let n=Number(value);if(!Number.isFinite(n)||n<0||n>leaf.points){valid=false;return;}scores[i]=n;
+});
+if(!valid){alert("أدخل درجة صحيحة لكل سؤال، ولا تتجاوز الدرجة المحددة للسؤال.");return;}
+a.manualScores=scores;a.score=scores.reduce((sum,v)=>sum+(Number(v)||0),0);delete a.finalScore;a.reviewed=true;a.visible=true;save();alert("تم حفظ التصحيح والدرجات.");renderTeacher();show("teacher");
+}
+function toggleExam(id){let e=data.exams.find(x=>x.id===id);if(!e)return;e.published=!e.published;save();renderTeacher();}
+function deleteExam(id){if(!confirm("هل تريد حذف الامتحان؟"))return;data.exams=data.exams.filter(e=>e.id!==id);save();renderTeacher();}
+function toggleResult(id){let a=data.attempts.find(x=>x.id===id);if(!a)return;a.visible=!a.visible;save();renderTeacher();}
+function deleteMessage(id){if(!confirm("هل تريد حذف هذه الرسالة؟"))return;data.messages=data.messages.filter(m=>m.id!==id);save();renderTeacher();}
+function sendSupport(){
+let name=document.getElementById("supportName").value.trim()||(data.student?.name||"طالب"),subject=document.getElementById("supportSubject").value.trim(),message=document.getElementById("supportMessage").value.trim();
+if(!subject||!message){document.getElementById("supportFeedback").textContent="أكمل بيانات الرسالة.";return;}
+data.messages.unshift({id:"message_"+Date.now(),name,subject,message,createdAt:Date.now()});save();
+document.getElementById("supportFeedback").textContent="تم إرسال الشكوى بنجاح.";document.getElementById("supportSubject").value="";document.getElementById("supportMessage").value="";
+}
+
+/* المترجم */
+function updateTranslationLanguage(){
+let direction=document.getElementById("translateDirection").value;
+document.getElementById("translationLanguage").textContent=direction==="en-ar"?"Arabic":"English";
+}
+function swapTranslation(){
+let direction=document.getElementById("translateDirection");direction.value=direction.value==="en-ar"?"ar-en":"en-ar";
+updateTranslationLanguage();document.getElementById("translationResult").textContent="ستظهر الترجمة هنا...";document.getElementById("translationStatus").textContent="";
+}
+async function translateText(){
+let input=document.getElementById("translateInput").value.trim(),result=document.getElementById("translationResult"),status=document.getElementById("translationStatus"),btn=document.getElementById("translateBtn");
+if(!input){status.textContent="اكتب كلمة أو جملة أولاً.";return;}
+let hasArabic=/[\u0600-\u06FF]/.test(input),source=hasArabic?"ar":"en",target=hasArabic?"en":"ar";
+document.getElementById("translateDirection").value=source+"-"+target;updateTranslationLanguage();
+btn.disabled=true;btn.textContent="جاري الترجمة...";status.textContent="يرجى الانتظار...";result.textContent="جاري ترجمة النص...";
+try{
+let url="https://translate.googleapis.com/translate_a/single?client=gtx&sl="+source+"&tl="+target+"&dt=t&q="+encodeURIComponent(input);
+let response=await fetch(url);if(!response.ok)throw new Error("Translation failed");
+let translated=(await response.json())[0].map(item=>item[0]||"").join("");
+if(!translated)throw new Error("Empty translation");result.textContent=translated;status.textContent="تمت الترجمة بنجاح ✓";
+}catch(error){result.textContent="";status.textContent="تعذرت الترجمة حالياً. تأكد من اتصال الإنترنت وحاول مرة أخرى.";}
+finally{btn.disabled=false;btn.textContent="ترجم الآن 🌐";}
+}
+function clearTranslator(){document.getElementById("translateInput").value="";document.getElementById("translationResult").textContent="ستظهر الترجمة هنا...";document.getElementById("translationStatus").textContent="";}
+function copyTranslation(){
+let text=document.getElementById("translationResult").textContent;
+if(!text||text==="ستظهر الترجمة هنا..."){alert("لا توجد ترجمة لنسخها.");return;}
+if(navigator.clipboard&&window.isSecureContext)navigator.clipboard.writeText(text).then(()=>alert("تم نسخ الترجمة بنجاح.")).catch(()=>alert("تعذر النسخ."));
+else{let area=document.createElement("textarea");area.value=text;document.body.appendChild(area);area.select();try{document.execCommand("copy");alert("تم نسخ الترجمة بنجاح.");}catch(e){alert("تعذر النسخ.");}area.remove();}
+}
+function speakTranslation(){
+let text=document.getElementById("translationResult").textContent;
+if(!text||text==="ستظهر الترجمة هنا..."){alert("لا توجد كلمة لسماع نطقها.");return;}
+if(!("speechSynthesis" in window)){alert("متصفحك لا يدعم خاصية النطق.");return;}
+let direction=document.getElementById("translateDirection").value,utterance=new SpeechSynthesisUtterance(text);
+utterance.lang=direction==="en-ar"?"ar-SA":"en-US";utterance.rate=0.85;speechSynthesis.cancel();speechSynthesis.speak(utterance);
+}
+
+/* نظام شهادات التقدير */
+function isPerfectAttempt(attempt){
+if(!attempt||!attempt.reviewed||!attempt.visible)return false;
+let exam=data.exams.find(e=>e.id===attempt.examId);
+if(!exam)return false;
+let leaves=getLeaves(exam);
+if(!leaves.length||!Array.isArray(attempt.manualScores)||attempt.manualScores.length!==leaves.length)return false;
+for(let i=0;i<leaves.length;i++){
+let score=attempt.manualScores[i];
+if(score===null||score===undefined||Number(score)!==Number(leaves[i].points))return false;
+}
+let total=leaves.reduce((sum,x)=>sum+(Number(x.points)||0),0);
+return Math.abs(getAttemptScore(attempt)-total)<0.0001;
+}
+function renderCertificates(){
+let box=document.getElementById("certificatesList");
+if(!box)return;
+if(!data.student){box.innerHTML='<div class="notice">سجل دخولك أولاً لعرض شهاداتك.</div><button class="primary" onclick="show(\'student\')">دخول الطلاب</button>';return;}
+let eligible=data.attempts.filter(a=>a.studentId===data.student.id&&isPerfectAttempt(a));
+if(!eligible.length){box.innerHTML='<div class="notice">لم تحصل على شهادة حتى الآن. تحصل على الشهادة عندما تجيب عن جميع الأسئلة إجابة صحيحة ويحفظ المدرس التصحيح.</div>';return;}
+box.innerHTML=eligible.map(a=>`
+<div class="exam">
+<h3>🏆 ${esc(a.title)}</h3>
+<p>الدرجة: ${getAttemptScore(a)} / ${a.total}</p>
+<p>تاريخ الحصول على الشهادة: ${new Date(a.submittedAt).toLocaleDateString("ar-EG")}</p>
+<button class="primary" onclick="printCertificate('${a.id}')">عرض وطباعة الشهادة</button>
+</div>`).join("");
+}
+function printCertificate(id){
+let a=data.attempts.find(x=>x.id===id);
+if(!a||!data.student||a.studentId!==data.student.id||!isPerfectAttempt(a)){
+alert("هذه الشهادة غير متاحة. يجب الحصول على الدرجة النهائية بعد التصحيح.");return;
+}
+let old=document.getElementById("printCertificate");
+if(old)old.remove();
+let cert=document.createElement("div");
+cert.id="printCertificate";
+cert.className="certificate";
+cert.innerHTML=`
+<div class="cert-mark">🏆</div>
+<h1>شهادة تقدير وتفوق</h1>
+<p>تتشرف منصة مستر محمود خاطر التعليمية بمنح هذه الشهادة إلى الطالب</p>
+<div class="cert-name">${esc(data.student.name)}</div>
+<p>بالصف الدراسي: <b>${esc(data.student.grade)}</b></p>
+<p>وذلك تقديراً لتفوقه وحصوله على الدرجة النهائية في امتحان</p>
+<h2>${esc(a.title)}</h2>
+<p><b>الدرجة: ${getAttemptScore(a)} من ${a.total}</b></p>
+<p>تاريخ الحصول على الشهادة: ${new Date(a.submittedAt).toLocaleDateString("ar-EG")}</p>
+<div class="certificate-footer">
+<div><div class="cert-stamp">ممتاز</div><p>مع أطيب التمنيات بالتوفيق</p></div>
+<div><h3>مستر محمود خاطر</h3><p>مدرس اللغة الإنجليزية</p></div>
+</div>`;
+document.body.appendChild(cert);
+window.print();
+setTimeout(()=>cert.remove(),1000);
+}
+
+function esc(text){
+return String(text??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+
+/* حفظ الإجابات محلياً أثناء الامتحان */
+function saveProgress(){
+if(!activeExam||!data.student)return;
+let answers=getStudentAnswers();
+try{localStorage.setItem("exam_progress",JSON.stringify({examId:activeExam.id,studentId:data.student.id,answers,endTime}));}catch(e){}
+}
+document.addEventListener("input",function(e){if(activeExam&&e.target.closest("#examQuestions"))saveProgress();});
+document.addEventListener("change",function(e){if(activeExam&&e.target.closest("#examQuestions"))saveProgress();});
+setInterval(saveProgress,2000);
+window.addEventListener("pagehide",function(){if(activeExam)submitExam(true);});
+
+/* ===========================
+   المزامنة بين الأجهزة
+=========================== */
+
+const SUPABASE_URL="https://bxdxqepogfwzihoqviof.supabase.co";
+const SUPABASE_KEY="sb_publishable_iGRFVKWuMRKlfzj8BZDauQ_F0sY_5HJ";
+const SYNC_URL=SUPABASE_URL+"/rest/v1/platform_sync";
+
+let syncReady=false;
+let syncApplying=false;
+let syncPending=false;
+let syncLastUpdated=null;
+let syncTimer=null;
+let syncPolling=false;
+
+function syncHeaders(extra={}){
+return {
+apikey:SUPABASE_KEY,
+Authorization:"Bearer "+SUPABASE_KEY,
+...extra
+};
+}
+
+function syncSnapshot(){
+return {
+students:data.students||[],
+exams:data.exams||[],
+attempts:data.attempts||[],
+messages:data.messages||[]
+};
+}
+
+/* حفظ البيانات محلياً ثم إرسال نسخة للسحابة */
+function save(){
+localStorage.setItem(KEY,JSON.stringify(data));
+if(syncReady&&!syncApplying)queueCloudSave();
+}
+
+function queueCloudSave(){
+syncPending=true;
+clearTimeout(syncTimer);
+syncTimer=setTimeout(writeCloudData,700);
+}
+
+async function writeCloudData(){
+if(!syncReady)return;
+try{
+const now=new Date().toISOString();
+const response=await fetch(SYNC_URL+"?on_conflict=id",{
+method:"POST",
+headers:syncHeaders({
+"Content-Type":"application/json",
+"Prefer":"resolution=merge-duplicates,return=minimal"
+}),
+body:JSON.stringify({
+id:"main",
+data:syncSnapshot(),
+updated_at:now
+})
+});
+if(!response.ok)throw new Error("Save failed: "+response.status);
+syncLastUpdated=now;
+syncPending=false;
+setSyncStatus("المزامنة تعمل ✓");
+}catch(error){
+console.error(error);
+syncPending=false;
+setSyncStatus("تعذرت المزامنة - جاري إعادة المحاولة");
+setTimeout(()=>{if(syncReady)queueCloudSave();},5000);
+}
+}
+
+async function readCloudData(){
+const response=await fetch(
+SYNC_URL+"?id=eq.main&select=data,updated_at",
+{headers:syncHeaders()}
+);
+if(!response.ok)throw new Error("Read failed: "+response.status);
+const rows=await response.json();
+return rows.length?rows[0]:null;
+}
+
+function applyCloudData(row){
+if(!row||!row.data)return;
+syncApplying=true;
+data.students=Array.isArray(row.data.students)?row.data.students:[];
+data.exams=Array.isArray(row.data.exams)?row.data.exams:[];
+data.attempts=Array.isArray(row.data.attempts)?row.data.attempts:[];
+data.messages=Array.isArray(row.data.messages)?row.data.messages:[];
+localStorage.setItem(KEY,JSON.stringify(data));
+syncApplying=false;
+syncLastUpdated=row.updated_at||null;
+refreshSyncedPage();
+}
+
+function refreshSyncedPage(){
+const visible=[...document.querySelectorAll("main>section")]
+.find(section=>!section.classList.contains("hidden"));
+if(!visible)return;
+if(visible.id==="student")renderStudent();
+if(visible.id==="teacher")renderTeacher();
+if(visible.id==="certificates")renderCertificates();
+}
+
+function setSyncStatus(message){
+const element=document.getElementById("syncStatus");
+if(element)element.textContent=message;
+}
+
+async function initializeSync(){
+setSyncStatus("جاري الاتصال...");
+try{
+const remote=await readCloudData();
+if(remote){
+const cloud=remote.data||{};
+const cloudHasData=
+(cloud.students||[]).length+
+(cloud.exams||[]).length+
+(cloud.attempts||[]).length+
+(cloud.messages||[]).length>0;
+const localHasData=
+(data.students||[]).length+
+(data.exams||[]).length+
+(data.attempts||[]).length+
+(data.messages||[]).length>0;
+
+if(cloudHasData||!localHasData){
+applyCloudData(remote);
+}else{
+syncLastUpdated=remote.updated_at||null;
+}
+}
+syncReady=true;
+if(!remote){
+await writeCloudData();
+}else{
+const cloud=remote.data||{};
+const cloudHasData=
+(cloud.students||[]).length+
+(cloud.exams||[]).length+
+(cloud.attempts||[]).length+
+(cloud.messages||[]).length>0;
+const localHasData=
+(data.students||[]).length+
+(data.exams||[]).length+
+(data.attempts||[]).length+
+(data.messages||[]).length>0;
+if(!cloudHasData&&localHasData){
+await writeCloudData();
+}else{
+setSyncStatus("المزامنة تعمل ✓");
+}
+}
+}catch(error){
+console.error(error);
+syncReady=false;
+setSyncStatus("فشل الاتصال - جاري إعادة المحاولة");
+setTimeout(initializeSync,5000);
+return;
+}
+
+if(!syncPolling){
+syncPolling=true;
+setInterval(async()=>{
+if(!syncReady||syncPending)return;
+try{
+const remote=await readCloudData();
+if(remote&&remote.updated_at!==syncLastUpdated){
+applyCloudData(remote);
+setSyncStatus("تم تحديث البيانات ✓");
+}
+}catch(error){
+console.error(error);
+setSyncStatus("انقطع الاتصال");
+}
+},5000);
+}
+}
+
+/* تشغيل المنصة والمزامنة */
+if(sessionStorage.getItem("teacher")==="yes")show("teacher");
+else show("home");
+
+initializeSync();
+
+</script>
+</body>
+</html> 
