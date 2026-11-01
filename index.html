@@ -353,4 +353,125 @@ return d||{students:[],student:null,exams:[],attempts:[],messages:[]};
 return {students:[],student:null,exams:[],attempts:[],messages:[]};
 }
 }
+function show(id){
+if(activeExam&&id!=="takingExam"){
+if(!confirm("هل تريد مغادرة الامتحان وتسليمه الآن؟"))return;
+submitExam(true);
+}
+document.querySelectorAll("main>section").forEach(x=>x.classList.add("hidden"));
+let target=document.getElementById(id);
+if(target)target.classList.remove("hidden");
+if(id==="student")renderStudent();
+if(id==="teacher")renderTeacher();
+if(id==="certificates")renderCertificates();
+closeSideMenu();
+}
+
+function toggleSideMenu(){
+document.getElementById("sideMenu").classList.toggle("hidden");
+document.getElementById("menuOverlay").classList.toggle("hidden");
+}
+function closeSideMenu(){
+document.getElementById("sideMenu").classList.add("hidden");
+document.getElementById("menuOverlay").classList.add("hidden");
+}
+function menuGo(id){show(id);}
+
+function toggleDarkMode(){
+document.body.classList.toggle("dark");
+localStorage.setItem("mahmoud_platform_theme",document.body.classList.contains("dark")?"dark":"light");
+}
+function loadTheme(){
+if(localStorage.getItem("mahmoud_platform_theme")==="dark")document.body.classList.add("dark");
+}
+loadTheme();
+
+function register(){
+let name=document.getElementById("studentName").value.trim();
+let phone=document.getElementById("parentPhone").value.trim();
+let grade=document.getElementById("grade").value;
+if(name.split(/\s+/).length<3||!phone||!grade){
+document.getElementById("regError").textContent="أدخل الاسم الثلاثي ورقم ولي الأمر والصف.";return;
+}
+let existing=data.students.find(s=>s.phone===phone&&s.name===name);
+if(existing){existing.grade=grade;data.student=existing;}
+else{
+data.student={id:"student_"+Date.now(),name,phone,grade,createdAt:Date.now()};
+data.students.push(data.student);
+}
+save();renderStudent();
+}
+function logout(){
+if(activeExam){alert("يجب تسليم الامتحان أولاً.");return;}
+data.student=null;save();renderStudent();
+}
+function renderStudent(){
+let s=data.student;
+document.getElementById("register").classList.toggle("hidden",!!s);
+document.getElementById("studentDashboard").classList.toggle("hidden",!s);
+if(!s)return;
+document.getElementById("welcome").textContent="أهلاً بك "+s.name;
+document.getElementById("studentInfo").textContent=s.grade;
+let exams=data.exams.filter(e=>e.published&&(e.grade==="الكل"||e.grade===s.grade));
+let box=document.getElementById("availableExams");box.innerHTML="";
+if(!exams.length)box.innerHTML='<div class="notice">لا يوجد امتحان متاح لمرحلتك الدراسية حاليًا.</div>';
+exams.forEach(e=>{
+let attempted=data.attempts.some(a=>a.examId===e.id&&a.studentId===s.id);
+let duration=getDuration(e,s.grade);
+box.innerHTML+=`<div class="exam"><h3>${esc(e.title)}</h3><span class="tag">${esc(e.grade)}</span> <span class="tag">${duration} دقيقة</span><button class="primary" ${attempted?"disabled":""} onclick="startExam('${e.id}')">${attempted?"تم التسليم بالفعل":"بدء الامتحان"}</button></div>`;
+});
+let mine=data.attempts.filter(a=>a.studentId===s.id);
+document.getElementById("myResults").innerHTML=mine.map(a=>`<div class="exam"><b>${esc(a.title)}</b><p>${a.visible?"الدرجة: "+getAttemptScore(a)+"/"+a.total:"النتيجة قيد المراجعة"}</p></div>`).join("")||"<p>لا توجد نتائج.</p>";
+}
+function showProfile(){
+document.getElementById("studentProfile").classList.remove("hidden");
+document.getElementById("studentExamArea").classList.add("hidden");
+let s=data.student;if(!s)return;
+document.getElementById("profileDetails").innerHTML=`<p><b>الاسم:</b> ${esc(s.name)}</p><p><b>رقم ولي الأمر:</b> ${esc(s.phone)}</p><p><b>الصف الدراسي:</b> ${esc(s.grade)}</p><p><b>تاريخ التسجيل:</b> ${new Date(s.createdAt).toLocaleDateString("ar-EG")}</p><p><b>عدد الامتحانات:</b> ${data.attempts.filter(a=>a.studentId===s.id).length}</p>`;
+let history=data.attempts.filter(a=>a.studentId===s.id);
+document.getElementById("profileHistory").innerHTML=history.length?history.map(a=>`<div class="exam"><h3>${esc(a.title)}</h3><p>الدرجة: ${a.visible?getAttemptScore(a)+"/"+a.total:"قيد المراجعة"}</p><p>تاريخ الامتحان: ${new Date(a.submittedAt).toLocaleString("ar-EG")}</p><span class="tag">تم التسليم</span></div>`).join(""):"<p>لم تؤد أي امتحان حتى الآن.</p>";
+}
+function hideProfile(){
+document.getElementById("studentProfile").classList.add("hidden");
+document.getElementById("studentExamArea").classList.remove("hidden");
+}
+function loginTeacher(){
+if(document.getElementById("password").value===TEACHER_PASSWORD){
+sessionStorage.setItem("teacher","yes");document.getElementById("password").value="";show("teacher");
+}else document.getElementById("loginError").textContent="كلمة المرور غير صحيحة.";
+}
+function teacherLogout(){sessionStorage.removeItem("teacher");show("home");}
+
+function renderDurationFields(){
+let grade=document.getElementById("examGrade").value,area=document.getElementById("durationArea");
+if(grade==="الكل"){
+area.innerHTML='<label>مدة الامتحان لكل مرحلة بالدقائق</label><div class="duration-grid" id="gradeDurations"></div>';
+document.getElementById("gradeDurations").innerHTML=GRADES.map(g=>`<div class="duration-item"><label>${g}</label><input class="gradeDuration" data-grade="${g}" type="number" min="1" value="30"></div>`).join("");
+}else area.innerHTML='<label>مدة الامتحان بالدقائق</label><input id="examDuration" type="number" value="30" min="1">';
+}
+
+function addQuestion(){
+let id=++questionNumber,el=document.createElement("div");el.className="question";el.id="question_"+id;
+el.innerHTML=`<div class="row"><b>السؤال ${id}</b><button class="danger" onclick="document.getElementById('question_${id}').remove()">حذف السؤال</button></div><label>نوع السؤال</label><select class="qtype" onchange="changeType(${id},this.value)"><option value="mcq">اختيار من متعدد</option><option value="rewrite">Rewrite</option><option value="correct">Correct</option><option value="dialog">Dialog</option><option value="passage">قطعة وأسئلة عليها</option></select><div class="typeArea" id="typeArea_${id}"></div>`;
+document.getElementById("questionBuilder").appendChild(el);changeType(id,"mcq");
+}
+function changeType(id,type){
+let area=document.getElementById("typeArea_"+id),html="";
+if(type==="mcq")html=`<label>السؤال</label><textarea class="qtext"></textarea><label>الدرجة</label><input class="qpoints" type="number" value="1" min="0.5" step="0.5"><label>الاختيارات (كل اختيار في سطر)</label><textarea class="qoptions" placeholder="Option A&#10;Option B&#10;Option C&#10;Option D"></textarea><label>رقم الإجابة الصحيحة</label><input class="qcorrect" type="number" min="1" value="1">`;
+if(type==="correct")html=`<p class="notice">اكتب الجملة ثم حدد الكلمة التي بها الخطأ.</p><label>الجملة</label><input class="correctSentence" oninput="renderWrongWords(${id})"><div id="wrongWords_${id}" class="builder-box"></div><input type="hidden" class="wrongWord"><label>الكلمة الصحيحة</label><input class="correctWord"><label>الدرجة</label><input class="qpoints" type="number" value="1" min="0.5" step="0.5">`;
+if(type==="rewrite")html=`<label>الكلمة الموجودة في الجملة</label><input class="originalWord"><label>الكلمة البديلة</label><input class="replacementWord"><label>الجملة بعد إعادة الصياغة</label><textarea class="rewriteExpected"></textarea><label>الدرجة</label><input class="qpoints" type="number" value="2" min="0.5" step="0.5">`;
+if(type==="dialog")html=`<div class="notice">أدخل اسمي الشخصين ثم أضف سطور الحوار وحدد الفراغ المطلوب.</div><label>اسم الشخص الأول</label><input class="personA"><label>اسم الشخص الثاني</label><input class="personB"><div class="dialogLines" id="dialogLines_${id}"></div><button type="button" class="secondary" onclick="addDialogLine(${id})">+ إضافة سطر حوار</button>`;
+if(type==="passage")html=`<label>نص القطعة</label><textarea class="passageText" style="min-height:160px"></textarea><hr><h4>أسئلة القطعة</h4><div id="passageQuestions_${id}"></div><button type="button" class="secondary" onclick="addPassageQuestion(${id})">+ إضافة سؤال للقطعة</button>`;
+area.innerHTML=html;if(type==="dialog")addDialogLine(id);if(type==="passage")addPassageQuestion(id);
+}
+function renderWrongWords(id){
+let q=document.getElementById("question_"+id),words=q.querySelector(".correctSentence").value.split(/\s+/).filter(Boolean);
+document.getElementById("wrongWords_"+id).innerHTML="<p>اضغط على الكلمة التي بها الخطأ:</p>"+words.map((w,i)=>`<button type="button" class="word-choice" onclick="selectWrongWord(${id},${i})">${esc(w)}</button>`).join("");
+}
+function selectWrongWord(id,index){
+let q=document.getElementById("question_"+id),words=q.querySelector(".correctSentence").value.split(/\s+/).filter(Boolean);
+q.querySelector(".wrongWord").value=words[index]||"";
+q.querySelectorAll(".word-choice").forEach((b,i)=>b.classList.toggle("selected",i===index));
+}
+function addDialogLine(id){
   
