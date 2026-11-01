@@ -51,7 +51,80 @@ hr{border:0;border-top:1px solid #e7ebf5;margin:18px 0}
 .word-choice{display:inline-block;background:#e9efff;color:#3157d5;padding:8px 12px;margin:4px;border-radius:8px;cursor:pointer;border:2px solid transparent}
 .word-choice.selected{border-color:#3157d5;background:#dce6ff}
 .dialog-person{font-weight:bold;color:#3157d5}
-@media(max-width:650px){.hero{grid-template-columns:1fr}.hero h1{font-size:24px}}
+
+/* Smart Translator */
+.translator-card{
+background:white;
+padding:25px;
+border-radius:20px;
+border:1px solid #e7ebf5;
+max-width:750px;
+margin:25px auto;
+box-shadow:0 8px 25px #18213b0a;
+}
+
+.translator-title{
+color:#172653;
+text-align:center;
+font-size:26px;
+}
+
+.translator-ribbon{
+display:inline-block;
+background:#e53950;
+color:white;
+padding:6px 18px;
+border-radius:6px;
+font-size:12px;
+font-weight:bold;
+margin:8px;
+transform:rotate(-4deg);
+}
+
+.translator-result{
+background:#f3f6ff;
+padding:18px;
+border-radius:12px;
+min-height:100px;
+margin-top:15px;
+font-size:19px;
+line-height:1.8;
+color:#172653;
+white-space:pre-wrap;
+overflow-wrap:anywhere;
+}
+
+.translator-switch{
+background:#edf1ff;
+color:#3157d5;
+font-size:20px;
+padding:9px 17px;
+}
+
+.translator-actions{
+display:flex;
+gap:10px;
+flex-wrap:wrap;
+margin-top:15px;
+}
+
+.translator-actions button{
+flex:1;
+min-width:110px;
+}
+
+.translator-note{
+font-size:12px;
+color:#77819a;
+text-align:center;
+margin-top:15px;
+}
+
+@media(max-width:650px){
+.hero{grid-template-columns:1fr}
+.hero h1{font-size:24px}
+.translator-card{padding:17px}
+}
 </style>
 </head>
 <body>
@@ -67,6 +140,7 @@ hr{border:0;border-top:1px solid #e7ebf5;margin:18px 0}
 <nav>
 <button onclick="show('home')">الرئيسية</button>
 <button onclick="show('student')">الطلاب</button>
+<button onclick="show('translator')">🌐 ترجمة <span style="background:#e53950;color:white;padding:3px 7px;border-radius:5px;font-size:10px">جديد</span></button>
 <button onclick="show('support')">الدعم الفني</button>
 <button onclick="show('teacherLogin')">وضع المدرس</button>
 </nav>
@@ -250,6 +324,63 @@ hr{border:0;border-top:1px solid #e7ebf5;margin:18px 0}
 <p class="notice">تنبيه: مغادرة الامتحان وتسليمه تحفظ الإجابات التي كتبتها حتى لحظة التسليم.</p>
 <div id="examQuestions"></div>
 <button class="primary" onclick="submitExam(false)">تسليم الامتحان</button>
+</div>
+</section>
+
+<!-- قسم المترجم الذكي الجديد -->
+<section id="translator" class="hidden">
+
+<div class="translator-card">
+
+<div style="text-align:center">
+<span class="translator-ribbon">جديد</span>
+<h2 class="translator-title">🌐 Smart Translator</h2>
+<p class="muted">المترجم الذكي لمنصة مستر محمود خاطر</p>
+</div>
+
+<hr>
+
+<label>اتجاه الترجمة</label>
+
+<div class="row">
+<select id="translateDirection" onchange="updateTranslationLanguage()">
+<option value="en-ar">English → Arabic</option>
+<option value="ar-en">Arabic → English</option>
+</select>
+
+<button class="translator-switch" onclick="swapTranslation()">⇄</button>
+</div>
+
+<label>اكتب الكلمة أو الجملة</label>
+
+<textarea id="translateInput"
+placeholder="اكتب هنا الكلمة أو الجملة التي تريد ترجمتها..."
+style="min-height:130px"></textarea>
+
+<div class="translator-actions">
+<button class="primary" id="translateBtn" onclick="translateText()">ترجم الآن 🌐</button>
+<button class="secondary" onclick="clearTranslator()">مسح</button>
+</div>
+
+<hr>
+
+<div class="row">
+<b>الترجمة</b>
+<span class="tag" id="translationLanguage">Arabic</span>
+</div>
+
+<div class="translator-result" id="translationResult">
+ستظهر الترجمة هنا...
+</div>
+
+<div class="translator-actions">
+<button class="secondary" onclick="copyTranslation()">📋 نسخ الترجمة</button>
+<button class="secondary" onclick="speakTranslation()">🔊 سماع النطق</button>
+</div>
+
+<p class="translator-note">Powered by Google Translate</p>
+<p id="translationStatus" class="small" style="text-align:center"></p>
+
 </div>
 </section>
 
@@ -448,8 +579,6 @@ document.getElementById("gradeDurations").innerHTML=GRADES.map(g=>`
 }else{
 area.innerHTML='<label>مدة الامتحان بالدقائق</label><input id="examDuration" type="number" value="30" min="1">';
 }
-
-/* لا شيء */
 }
 
 function addQuestion(){
@@ -762,7 +891,6 @@ function getDuration(exam,grade){
 return Number(exam.durationByGrade?.[grade]||exam.duration||30);
 }
 
-/* تحويل جميع الأسئلة إلى عناصر قابلة للتصحيح */
 function getLeaves(exam){
 let leaves=[];
 exam.questions.forEach((q,i)=>{
@@ -1072,7 +1200,6 @@ document.getElementById("teacherMessages").innerHTML=data.messages.map(m=>`
 </div>`).join("")||"لا توجد رسائل أو شكاوى.";
 }
 
-/* تعديل الدرجة النهائية مباشرة بعد التسليم */
 function editAttemptScore(id){
 let a=data.attempts.find(x=>x.id===id);
 if(!a)return;
@@ -1286,6 +1413,167 @@ document.getElementById("supportSubject").value="";
 document.getElementById("supportMessage").value="";
 }
 
+/* Smart Translator Functions */
+
+function updateTranslationLanguage(){
+let direction=document.getElementById("translateDirection").value;
+document.getElementById("translationLanguage").textContent=
+direction==="en-ar"?"Arabic":"English";
+}
+
+function swapTranslation(){
+let direction=document.getElementById("translateDirection");
+
+direction.value=
+direction.value==="en-ar"?"ar-en":"en-ar";
+
+updateTranslationLanguage();
+
+document.getElementById("translationResult").textContent=
+"ستظهر الترجمة هنا...";
+document.getElementById("translationStatus").textContent="";
+}
+
+async function translateText(){
+
+let input=document.getElementById("translateInput").value.trim();
+let direction=document.getElementById("translateDirection").value;
+
+let result=document.getElementById("translationResult");
+let status=document.getElementById("translationStatus");
+let btn=document.getElementById("translateBtn");
+
+if(!input){
+status.textContent="اكتب كلمة أو جملة أولاً.";
+return;
+}
+
+/* تحديد اللغة تلقائياً */
+let hasArabic=/[\u0600-\u06FF]/.test(input);
+
+let source=hasArabic?"ar":"en";
+let target=hasArabic?"en":"ar";
+
+direction=source+"-"+target;
+
+document.getElementById("translateDirection").value=direction;
+updateTranslationLanguage();
+
+btn.disabled=true;
+btn.textContent="جاري الترجمة...";
+status.textContent="يرجى الانتظار...";
+result.textContent="جاري ترجمة النص...";
+
+try{
+
+let url=
+"https://translate.googleapis.com/translate_a/single?client=gtx&sl="+
+source+"&tl="+target+"&dt=t&q="+encodeURIComponent(input);
+
+let response=await fetch(url);
+
+if(!response.ok){
+throw new Error("Translation failed");
+}
+
+let data=await response.json();
+
+let translated=data[0]
+.map(item=>item[0]||"")
+.join("");
+
+if(!translated){
+throw new Error("Empty translation");
+}
+
+result.textContent=translated;
+status.textContent="تمت الترجمة بنجاح ✓";
+
+}catch(error){
+
+result.textContent="";
+status.textContent=
+"تعذرت الترجمة حالياً. تأكد من اتصال الإنترنت وحاول مرة أخرى.";
+
+}finally{
+
+btn.disabled=false;
+btn.textContent="ترجم الآن 🌐";
+
+}
+
+}
+
+function clearTranslator(){
+
+document.getElementById("translateInput").value="";
+document.getElementById("translationResult").textContent=
+"ستظهر الترجمة هنا...";
+document.getElementById("translationStatus").textContent="";
+
+}
+
+function copyTranslation(){
+
+let text=document.getElementById("translationResult").textContent;
+
+if(!text||text==="ستظهر الترجمة هنا..."){
+alert("لا توجد ترجمة لنسخها.");
+return;
+}
+
+if(navigator.clipboard&&window.isSecureContext){
+
+navigator.clipboard.writeText(text)
+.then(()=>alert("تم نسخ الترجمة بنجاح."))
+.catch(()=>alert("تعذر النسخ."));
+
+}else{
+
+let area=document.createElement("textarea");
+area.value=text;
+document.body.appendChild(area);
+area.select();
+
+try{
+document.execCommand("copy");
+alert("تم نسخ الترجمة بنجاح.");
+}catch(e){
+alert("تعذر النسخ.");
+}
+
+area.remove();
+
+}
+
+}
+
+function speakTranslation(){
+
+let text=document.getElementById("translationResult").textContent;
+
+if(!text||text==="ستظهر الترجمة هنا..."){
+alert("لا توجد كلمة لسماع نطقها.");
+return;
+}
+
+if(!("speechSynthesis" in window)){
+alert("متصفحك لا يدعم خاصية النطق.");
+return;
+}
+
+let direction=document.getElementById("translateDirection").value;
+
+let utterance=new SpeechSynthesisUtterance(text);
+
+utterance.lang=direction==="en-ar"?"ar-SA":"en-US";
+utterance.rate=0.85;
+
+speechSynthesis.cancel();
+speechSynthesis.speak(utterance);
+
+}
+
 function esc(text){
 return String(text??"").replace(/[&<>"']/g,c=>({
 "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
@@ -1322,4 +1610,4 @@ if(sessionStorage.getItem("teacher")==="yes")show("teacher");
 else show("home");
 </script>
 </body>
-                                                            </html>
+</html>
