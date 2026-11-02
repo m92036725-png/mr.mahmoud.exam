@@ -154,6 +154,7 @@ body *{visibility:hidden!important}
 <button onclick="menuGo('translator')">🌐 الترجمة</button>
 <button onclick="menuGo('support')">🎧 الدعم الفني</button>
 <button onclick="menuGo('teacherLogin')">👨‍🏫 وضع المدرس</button>
+<button onclick="menuGo('parent')">👪 وضع ولي الأمر</button>
 <button onclick="menuGo('certificates')">🏆 الشهادات</button>
 <button onclick="toggleDarkMode();closeSideMenu()">🌙 الوضع الليلي / النهاري</button>
 </aside>
@@ -188,7 +189,7 @@ body *{visibility:hidden!important}
 <section id="student" class="hidden">
 <h2>منطقة الطالب</h2>
 <div id="register" class="panel">
-<h3>إنشاء حساب الطالب</h3>
+<h3>إنشاء حساب الطالب / تسجيل الدخول</h3>
 <label>الاسم الثلاثي</label>
 <input id="studentName" placeholder="اكتب اسمك الثلاثي">
 <label>رقم ولي الأمر</label>
@@ -200,6 +201,8 @@ body *{visibility:hidden!important}
 <option>الأول الإعدادي</option><option>الثاني الإعدادي</option><option>الثالث الإعدادي</option>
 <option>الأول الثانوي</option><option>الثاني الثانوي</option>
 </select>
+<label>كلمة المرور</label>
+<input id="studentPass" type="password" placeholder="كلمة مرور حسابك">
 <button class="primary" onclick="register()">تسجيل الدخول</button>
 <p id="regError"></p>
 </div>
@@ -320,6 +323,18 @@ body *{visibility:hidden!important}
 </div>
 </section>
 
+<section id="parent" class="hidden">
+<div class="panel" style="max-width:600px;margin:auto">
+<h2>👪 وضع ولي الأمر</h2>
+<div id="parentLogin">
+<label>اسم الطالب (اختياري)</label><input id="parentStudentName" placeholder="اسم الطالب">
+<label>كود ولي الأمر</label><input id="parentCodeInput" placeholder="مثال: AB123456" style="direction:ltr;text-transform:uppercase">
+<button class="primary" onclick="parentLogin()">دخول</button><p id="parentError"></p>
+</div>
+<div id="parentView" class="hidden"></div>
+</div>
+</section>
+
 <section id="certificates" class="hidden">
 <div class="panel">
 <div class="row">
@@ -364,6 +379,7 @@ if(target)target.classList.remove("hidden");
 if(id==="student")renderStudent();
 if(id==="teacher")renderTeacher();
 if(id==="certificates")renderCertificates();
+if(id==="parent")renderParent();
 closeSideMenu();
 }
 
@@ -386,19 +402,44 @@ if(localStorage.getItem("mahmoud_platform_theme")==="dark")document.body.classLi
 }
 loadTheme();
 
-function register(){
+/* ===== حسابات الطلاب: باسورد + كود ولي الأمر + الحظر ===== */
+async function hashPass(p){
+const b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode("mk|"+p));
+return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join("");
+}
+function genParentCode(){
+let code,L=()=>String.fromCharCode(65+Math.floor(Math.random()*26));
+do{code=L()+L()+String(Math.floor(Math.random()*1000000)).padStart(6,"0");}
+while(data.students.some(s=>s.parentCode===code));
+return code;
+}
+function isBanned(s){return !!(s&&s.ban&&(s.ban.permanent||Date.now()<s.ban.until));}
+function banText(s){
+if(!isBanned(s))return"";
+return s.ban.permanent?"محظور بشكل دائم":"محظور حتى "+new Date(s.ban.until).toLocaleString("ar-EG");
+}
+async function register(){
 let name=document.getElementById("studentName").value.trim();
 let phone=document.getElementById("parentPhone").value.trim();
 let grade=document.getElementById("grade").value;
-if(name.split(/\s+/).length<3||!phone||!grade){
-document.getElementById("regError").textContent="أدخل الاسم الثلاثي ورقم ولي الأمر والصف.";return;
+let pass=document.getElementById("studentPass").value;
+let err=document.getElementById("regError");
+if(name.split(/\s+/).length<3||!phone||!grade||pass.length<4){
+err.textContent="أدخل الاسم الثلاثي ورقم ولي الأمر والصف وكلمة مرور (4 أحرف على الأقل).";return;
 }
+let h=await hashPass(pass);
 let existing=data.students.find(s=>s.phone===phone&&s.name===name);
-if(existing){existing.grade=grade;data.student=existing;}
-else{
-data.student={id:"student_"+Date.now(),name,phone,grade,createdAt:Date.now()};
+if(existing){
+if(isBanned(existing)){err.textContent=banText(existing);return;}
+if(existing.passHash&&existing.passHash!==h){err.textContent="كلمة المرور غير صحيحة.";return;}
+if(!existing.passHash)existing.passHash=h;
+if(!existing.parentCode)existing.parentCode=genParentCode();
+existing.grade=grade;data.student=existing;
+}else{
+data.student={id:"student_"+Date.now(),name,phone,grade,passHash:h,parentCode:genParentCode(),createdAt:Date.now()};
 data.students.push(data.student);
 }
+err.textContent="";document.getElementById("studentPass").value="";
 save();renderStudent();
 }
 function logout(){
@@ -411,7 +452,7 @@ document.getElementById("register").classList.toggle("hidden",!!s);
 document.getElementById("studentDashboard").classList.toggle("hidden",!s);
 if(!s)return;
 document.getElementById("welcome").textContent="أهلاً بك "+s.name;
-document.getElementById("studentInfo").textContent=s.grade;
+document.getElementById("studentInfo").textContent=s.grade+" • كود ولي الأمر: "+(s.parentCode||"-");
 let exams=data.exams.filter(e=>e.published&&(e.grade==="الكل"||e.grade===s.grade));
 let box=document.getElementById("availableExams");box.innerHTML="";
 if(!exams.length)box.innerHTML='<div class="notice">لا يوجد امتحان متاح لمرحلتك الدراسية حاليًا.</div>';
@@ -427,7 +468,7 @@ function showProfile(){
 document.getElementById("studentProfile").classList.remove("hidden");
 document.getElementById("studentExamArea").classList.add("hidden");
 let s=data.student;if(!s)return;
-document.getElementById("profileDetails").innerHTML=`<p><b>الاسم:</b> ${esc(s.name)}</p><p><b>رقم ولي الأمر:</b> ${esc(s.phone)}</p><p><b>الصف الدراسي:</b> ${esc(s.grade)}</p><p><b>تاريخ التسجيل:</b> ${new Date(s.createdAt).toLocaleDateString("ar-EG")}</p><p><b>عدد الامتحانات:</b> ${data.attempts.filter(a=>a.studentId===s.id).length}</p>`;
+document.getElementById("profileDetails").innerHTML=`<p><b>الاسم:</b> ${esc(s.name)}</p><p><b>رقم ولي الأمر:</b> ${esc(s.phone)}</p><p><b>الصف الدراسي:</b> ${esc(s.grade)}</p><p><b>🔑 كود ولي الأمر:</b> ${esc(s.parentCode||"-")}</p><p><b>تاريخ التسجيل:</b> ${new Date(s.createdAt).toLocaleDateString("ar-EG")}</p><p><b>عدد الامتحانات:</b> ${data.attempts.filter(a=>a.studentId===s.id).length}</p>`;
 let history=data.attempts.filter(a=>a.studentId===s.id);
 document.getElementById("profileHistory").innerHTML=history.length?history.map(a=>`<div class="exam"><h3>${esc(a.title)}</h3><p>الدرجة: ${a.visible?getAttemptScore(a)+"/"+a.total:"قيد المراجعة"}</p><p>تاريخ الامتحان: ${new Date(a.submittedAt).toLocaleString("ar-EG")}</p><span class="tag">تم التسليم</span></div>`).join(""):"<p>لم تؤد أي امتحان حتى الآن.</p>";
 }
@@ -452,12 +493,13 @@ document.getElementById("gradeDurations").innerHTML=GRADES.map(g=>`<div class="d
 
 function addQuestion(){
 let id=++questionNumber,el=document.createElement("div");el.className="question";el.id="question_"+id;
-el.innerHTML=`<div class="row"><b>السؤال ${id}</b><button class="danger" onclick="document.getElementById('question_${id}').remove()">حذف السؤال</button></div><label>نوع السؤال</label><select class="qtype" onchange="changeType(${id},this.value)"><option value="mcq">اختيار من متعدد</option><option value="rewrite">Rewrite</option><option value="correct">Correct</option><option value="dialog">Dialog</option><option value="passage">قطعة وأسئلة عليها</option></select><div class="typeArea" id="typeArea_${id}"></div>`;
+el.innerHTML=`<div class="row"><b>السؤال ${id}</b><button class="danger" onclick="document.getElementById('question_${id}').remove()">حذف السؤال</button></div><label>نوع السؤال</label><select class="qtype" onchange="changeType(${id},this.value)"><option value="mcq">اختيار من متعدد</option><option value="tf">True / False</option><option value="rewrite">Rewrite</option><option value="correct">Correct</option><option value="dialog">Dialog</option><option value="passage">قطعة وأسئلة عليها</option></select><div class="typeArea" id="typeArea_${id}"></div>`;
 document.getElementById("questionBuilder").appendChild(el);changeType(id,"mcq");
 }
 function changeType(id,type){
 let area=document.getElementById("typeArea_"+id),html="";
 if(type==="mcq")html=`<label>السؤال</label><textarea class="qtext"></textarea><label>الدرجة</label><input class="qpoints" type="number" value="1" min="0.5" step="0.5"><label>الاختيارات (كل اختيار في سطر)</label><textarea class="qoptions" placeholder="Option A&#10;Option B&#10;Option C&#10;Option D"></textarea><label>رقم الإجابة الصحيحة</label><input class="qcorrect" type="number" min="1" value="1">`;
+if(type==="tf")html=`<label>السؤال</label><textarea class="qtext"></textarea><label>الدرجة</label><input class="qpoints" type="number" value="1" min="0.5" step="0.5"><label>الإجابة الصحيحة</label><select class="qcorrect"><option value="1">True</option><option value="2">False</option></select>`;
 if(type==="correct")html=`<p class="notice">اكتب الجملة ثم حدد الكلمة التي بها الخطأ.</p><label>الجملة</label><input class="correctSentence" oninput="renderWrongWords(${id})"><div id="wrongWords_${id}" class="builder-box"></div><input type="hidden" class="wrongWord"><label>الكلمة الصحيحة</label><input class="correctWord"><label>الدرجة</label><input class="qpoints" type="number" value="1" min="0.5" step="0.5">`;
 if(type==="rewrite")html=`<label>الكلمة الموجودة في الجملة</label><input class="originalWord"><label>الكلمة البديلة</label><input class="replacementWord"><label>الجملة بعد إعادة الصياغة</label><textarea class="rewriteExpected"></textarea><label>الدرجة</label><input class="qpoints" type="number" value="2" min="0.5" step="0.5">`;
 if(type==="dialog")html=`<div class="notice">أدخل اسمي الشخصين ثم أضف سطور الحوار وحدد الفراغ المطلوب.</div><label>اسم الشخص الأول</label><input class="personA"><label>اسم الشخص الثاني</label><input class="personB"><div class="dialogLines" id="dialogLines_${id}"></div><button type="button" class="secondary" onclick="addDialogLine(${id})">+ إضافة سطر حوار</button>`;
@@ -494,6 +536,10 @@ let type=q.querySelector(".qtype").value,obj={type};
 if(type==="mcq"){
 obj.text=q.querySelector(".qtext").value.trim();obj.points=Number(q.querySelector(".qpoints").value);obj.options=q.querySelector(".qoptions").value.split("\n").map(x=>x.trim()).filter(Boolean);obj.correct=Number(q.querySelector(".qcorrect").value);
 if(!obj.text||obj.points<=0||obj.options.length<2||obj.correct<1||obj.correct>obj.options.length)invalid=true;
+}
+if(type==="tf"){
+obj.text=q.querySelector(".qtext").value.trim();obj.points=Number(q.querySelector(".qpoints").value);obj.correct=Number(q.querySelector(".qcorrect").value);
+if(!obj.text||obj.points<=0)invalid=true;
 }
 if(type==="correct"){
 obj.sentence=q.querySelector(".correctSentence").value.trim();obj.wrongWord=q.querySelector(".wrongWord").value.trim();obj.correctWord=q.querySelector(".correctWord").value.trim();obj.points=Number(q.querySelector(".qpoints").value);
@@ -536,6 +582,7 @@ let leaves=[];
 exam.questions.forEach((q,i)=>{
 if(q.type==="dialog")(q.lines||[]).forEach((line,j)=>{if(line.blank)leaves.push({key:`${i}_${j}`,parent:i,index:j,type:"mcq",points:Number(line.points)||1,options:line.options||[],correct:line.correct,kind:"dialog"});});
 else if(q.type==="passage")(q.subquestions||[]).forEach((sub,j)=>leaves.push({key:`${i}_${j}`,parent:i,index:j,type:sub.type==="mcq"?"mcq":"essay",text:sub.text,points:sub.points,options:sub.options||[],correct:sub.correct,expected:sub.expected,kind:"passage"}));
+else if(q.type==="tf")leaves.push({key:String(i),parent:i,index:0,type:"mcq",text:q.text,points:q.points,options:["True","False"],correct:q.correct,kind:"tf"});
 else leaves.push({key:String(i),parent:i,index:0,type:q.type,text:q.text||q.sentence||"",points:q.points,options:q.options||[],correct:q.correct,expected:q.expected,kind:q.type});
 });
 return leaves;
@@ -550,6 +597,7 @@ let box=document.getElementById("examQuestions");box.innerHTML="";
 e.questions.forEach((q,i)=>{
 let html="";
 if(q.type==="mcq"){html+=`<b>${i+1}. ${esc(q.text)}</b><p class="small">${q.points} درجة</p>`;html+=q.options.map((o,j)=>`<label class="option"><input type="radio" name="answer_${i}" value="${j+1}">${esc(o)}</label>`).join("");}
+if(q.type==="tf")html+=`<b>${i+1}. ${esc(q.text)}</b><p class="small">${q.points} درجة</p><label class="option"><input type="radio" name="answer_${i}" value="1">True</label><label class="option"><input type="radio" name="answer_${i}" value="2">False</label>`;
 if(q.type==="correct")html+=`<b>${i+1}. Correct</b><p>${esc(q.sentence)}</p><p class="small">اكتب الكلمة الصحيحة بدلاً من الكلمة التي بها الخطأ.</p><input id="answer_${i}" placeholder="اكتب الكلمة الصحيحة هنا"><p class="small">${q.points} درجة</p>`;
 if(q.type==="rewrite")html+=`<b>${i+1}. Rewrite</b><p>استخدم كلمة: <b>${esc(q.replacementWord)}</b></p><p>الكلمة الأصلية: ${esc(q.originalWord)}</p><p class="small">اكتب الجملة كاملة بعد إعادة الصياغة.</p><textarea id="answer_${i}"></textarea><p class="small">${q.points} درجة</p>`;
 if(q.type==="dialog"){
@@ -570,7 +618,7 @@ let answers=[];
 activeExam.questions.forEach((q,i)=>{
 if(q.type==="dialog")answers.push((q.lines||[]).map((line,j)=>line.blank?(document.querySelector(`input[name="answer_${i}_${j}"]:checked`)?.value||""):""));
 else if(q.type==="passage")answers.push((q.subquestions||[]).map((sub,j)=>sub.type==="mcq"?(document.querySelector(`input[name="answer_${i}_${j}"]:checked`)?.value||""):(document.getElementById(`answer_${i}_${j}`)?.value||"")));
-else if(q.type==="mcq")answers.push(document.querySelector(`input[name="answer_${i}"]:checked`)?.value||"");
+else if(q.type==="mcq"||q.type==="tf")answers.push(document.querySelector(`input[name="answer_${i}"]:checked`)?.value||"");
 else answers.push(document.getElementById("answer_"+i)?.value||"");
 });
 return answers;
@@ -615,7 +663,7 @@ document.getElementById("messageCount").textContent=data.messages.length;
 document.getElementById("teacherExams").innerHTML=data.exams.map(e=>`<div class="exam"><h3>${esc(e.title)}</h3><p>${esc(e.grade)} • ${e.grade==="الكل"?"مدة مختلفة حسب المرحلة":getDuration(e,e.grade)+" دقيقة"}</p><p>عدد الأسئلة: ${e.questions.length}</p><button class="secondary" onclick="toggleExam('${e.id}')">${e.published?"إيقاف النشر":"إعادة النشر"}</button> <button class="danger" onclick="deleteExam('${e.id}')">حذف</button></div>`).join("")||"لا توجد امتحانات.";
 document.getElementById("teacherResults").innerHTML=data.students.map(s=>{
 let attempts=data.attempts.filter(a=>a.studentId===s.id);
-return `<div class="exam"><div class="row"><h3>${esc(s.name)}</h3><span class="tag">${esc(s.grade)}</span></div><p>رقم ولي الأمر: ${esc(s.phone)}</p><p>تاريخ التسجيل: ${new Date(s.createdAt).toLocaleDateString("ar-EG")}</p><p>عدد الامتحانات: ${attempts.length}</p><button class="secondary" onclick="viewStudentProfile('${s.id}')">فتح الملف الشخصي الكامل</button>${attempts.map(a=>`<div class="notice"><b>${esc(a.title)}</b><br>الدرجة الحالية: ${getAttemptScore(a)}/${a.total}<br>${a.reviewed?"تم التصحيح":"توجد إجابات تحتاج إلى مراجعة"}<br>${new Date(a.submittedAt).toLocaleString("ar-EG")}<div class="actions"><button class="secondary" onclick="reviewAttempt('${a.id}')">عرض الإجابات وتصحيحها</button><button class="secondary" onclick="editAttemptScore('${a.id}')">تعديل الدرجة النهائية</button><button class="secondary" onclick="toggleResult('${a.id}')">${a.visible?"إخفاء النتيجة":"إظهار النتيجة"}</button></div></div>`).join("")}</div>`;
+return `<div class="exam"><div class="row"><h3>${esc(s.name)}</h3><span class="tag">${esc(s.grade)}</span></div><p>رقم ولي الأمر: ${esc(s.phone)}</p><p>تاريخ التسجيل: ${new Date(s.createdAt).toLocaleDateString("ar-EG")}</p><p>عدد الامتحانات: ${attempts.length}</p><p>كود ولي الأمر: <b>${esc(s.parentCode||"-")}</b></p>${isBanned(s)?`<p style="color:#d94b63"><b>${banText(s)}</b></p>`:""}<div class="actions"><button class="secondary" onclick="viewStudentProfile('${s.id}')">فتح الملف الشخصي الكامل</button>${isBanned(s)?`<button class="success" onclick="unbanStudent('${s.id}')">فك الحظر</button>`:`<button class="danger" onclick="banStudent('${s.id}')">حظر</button>`}<button class="secondary" onclick="resetPass('${s.id}')">إعادة تعيين الباسورد</button><button class="danger" onclick="deleteStudent('${s.id}')">حذف الطالب</button></div>${attempts.map(a=>`<div class="notice"><b>${esc(a.title)}</b><br>الدرجة الحالية: ${getAttemptScore(a)}/${a.total}<br>${a.reviewed?"تم التصحيح":"توجد إجابات تحتاج إلى مراجعة"}<br>${new Date(a.submittedAt).toLocaleString("ar-EG")}<div class="actions"><button class="secondary" onclick="reviewAttempt('${a.id}')">عرض الإجابات وتصحيحها</button><button class="secondary" onclick="editAttemptScore('${a.id}')">تعديل الدرجة النهائية</button><button class="secondary" onclick="toggleResult('${a.id}')">${a.visible?"إخفاء النتيجة":"إظهار النتيجة"}</button></div></div>`).join("")}</div>`;
 }).join("")||"لا يوجد طلاب.";
 document.getElementById("teacherMessages").innerHTML=data.messages.map(m=>`<div class="exam"><div class="row"><b>${esc(m.name||"طالب")}</b><span class="tag">${new Date(m.createdAt||Date.now()).toLocaleString("ar-EG")}</span></div><h4>${esc(m.subject)}</h4><p>${esc(m.message)}</p><button class="danger" onclick="deleteMessage('${m.id}')">حذف الرسالة</button></div>`).join("")||"لا توجد رسائل أو شكاوى.";
 }
@@ -628,7 +676,7 @@ a.finalScore=n;a.score=n;a.reviewed=true;a.visible=true;save();renderTeacher();a
 }
 function viewStudentProfile(id){
 let s=data.students.find(x=>x.id===id);if(!s)return;let attempts=data.attempts.filter(a=>a.studentId===id);
-document.getElementById("reviewContent").innerHTML=`<h2>الملف الشخصي للطالب</h2><div class="exam"><p><b>الاسم:</b> ${esc(s.name)}</p><p><b>رقم ولي الأمر:</b> ${esc(s.phone)}</p><p><b>الصف:</b> ${esc(s.grade)}</p><p><b>تاريخ التسجيل:</b> ${new Date(s.createdAt).toLocaleString("ar-EG")}</p><p><b>عدد المحاولات:</b> ${attempts.length}</p></div><h3>سجل الامتحانات</h3>${attempts.map(a=>`<div class="exam"><b>${esc(a.title)}</b><p>الدرجة: ${getAttemptScore(a)}/${a.total}</p><p>تاريخ التسليم: ${new Date(a.submittedAt).toLocaleString("ar-EG")}</p><button class="secondary" onclick="reviewAttempt('${a.id}')">عرض الإجابات</button> <button class="secondary" onclick="editAttemptScore('${a.id}')">تعديل الدرجة</button></div>`).join("")||"<p>لا توجد امتحانات.</p>"}`;
+document.getElementById("reviewContent").innerHTML=`<h2>الملف الشخصي للطالب</h2><div class="exam"><p><b>الاسم:</b> ${esc(s.name)}</p><p><b>رقم ولي الأمر:</b> ${esc(s.phone)}</p><p><b>الصف:</b> ${esc(s.grade)}</p><p><b>كود ولي الأمر:</b> ${esc(s.parentCode||"-")}</p><p><b>تاريخ التسجيل:</b> ${new Date(s.createdAt).toLocaleString("ar-EG")}</p><p><b>عدد المحاولات:</b> ${attempts.length}</p></div><h3>سجل الامتحانات</h3>${attempts.map(a=>`<div class="exam"><b>${esc(a.title)}</b><p>الدرجة: ${getAttemptScore(a)}/${a.total}</p><p>تاريخ التسليم: ${new Date(a.submittedAt).toLocaleString("ar-EG")}</p><button class="secondary" onclick="reviewAttempt('${a.id}')">عرض الإجابات</button> <button class="secondary" onclick="editAttemptScore('${a.id}')">تعديل الدرجة</button></div>`).join("")||"<p>لا توجد امتحانات.</p>"}`;
 show("reviewAttempt");
 }
 function getAnswerForLeaf(a,leaf){
@@ -647,7 +695,8 @@ else if(leaf.kind==="passage"){let sub=e.questions[leaf.parent].subquestions[lea
 else if(leaf.kind==="correct")model=e.questions[leaf.parent].correctWord;
 else if(leaf.kind==="rewrite")model=e.questions[leaf.parent].expected;
 else if(leaf.type==="mcq")model=leaf.options?.[Number(leaf.correct)-1]||"";
-html+=`<div class="answer-review"><h4>السؤال ${i+1}: ${esc(leaf.kind)}</h4><p>${esc(leaf.text||"")}</p><p><b>إجابة الطالب:</b></p><div class="notice">${esc(answer||"لم تتم الإجابة")}</div>${model?`<p><b>الإجابة النموذجية:</b> ${esc(model)}</p>`:""}<p>الدرجة الكلية: ${leaf.points}</p><label>الدرجة التي يستحقها الطالب</label><input class="earnedScore" data-index="${i}" type="number" min="0" max="${leaf.points}" step="0.5" value="${earned===null||earned===undefined?"":earned}" placeholder="اكتب الدرجة"></div>`;
+let shownAnswer=(leaf.type==="mcq"&&answer)?(leaf.options?.[Number(answer)-1]||answer):answer;
+html+=`<div class="answer-review"><h4>السؤال ${i+1}: ${esc(leaf.kind)}</h4><p>${esc(leaf.text||"")}</p><p><b>إجابة الطالب:</b></p><div class="notice">${esc(shownAnswer||"لم تتم الإجابة")}</div>${model?`<p><b>الإجابة النموذجية:</b> ${esc(model)}</p>`:""}<p>الدرجة الكلية: ${leaf.points}</p><label>الدرجة التي يستحقها الطالب</label><input class="earnedScore" data-index="${i}" type="number" min="0" max="${leaf.points}" step="0.5" value="${earned===null||earned===undefined?"":earned}" placeholder="اكتب الدرجة"></div>`;
 });
 html+=`<div class="notice"><b>الدرجة النهائية بعد التصحيح:</b> <span id="reviewTotal">${getAttemptScore(a)}</span> / ${a.total}</div><button class="primary" onclick="saveReview('${a.id}')">حفظ التصحيح والدرجات</button> <button class="secondary" onclick="show('teacher')">العودة</button>`;
 document.getElementById("reviewContent").innerHTML=html;show("reviewAttempt");
@@ -886,6 +935,7 @@ if(!visible)return;
 if(visible.id==="student")renderStudent();
 if(visible.id==="teacher")renderTeacher();
 if(visible.id==="certificates")renderCertificates();
+if(visible.id==="parent")renderParent();
 }
 
 function setSyncStatus(message){
@@ -963,6 +1013,66 @@ setSyncStatus("انقطع الاتصال");
 }
 }
 
+/* ===== وضع ولي الأمر ===== */
+function parentLogin(){
+let code=document.getElementById("parentCodeInput").value.trim().toUpperCase();
+let name=document.getElementById("parentStudentName").value.trim();
+let s=data.students.find(x=>x.parentCode===code);
+let err=document.getElementById("parentError");
+if(!s||(name&&normalizeAnswer(name)!==normalizeAnswer(s.name))){err.textContent="الكود غير صحيح أو الاسم لا يطابق.";return;}
+sessionStorage.setItem("parentCode",code);err.textContent="";renderParent();
+}
+function parentLogout(){sessionStorage.removeItem("parentCode");renderParent();}
+function renderParent(){
+let code=sessionStorage.getItem("parentCode"),s=code&&data.students.find(x=>x.parentCode===code);
+document.getElementById("parentLogin").classList.toggle("hidden",!!s);
+let v=document.getElementById("parentView");v.classList.toggle("hidden",!s);
+if(!s){if(code)sessionStorage.removeItem("parentCode");return;}
+let at=data.attempts.filter(a=>a.studentId===s.id),shown=at.filter(a=>a.visible);
+let avg=shown.length?Math.round(shown.reduce((t,a)=>t+getAttemptScore(a)/(a.total||1)*100,0)/shown.length):0;
+v.innerHTML=`<div class="row"><h3>${esc(s.name)}</h3><button class="danger" onclick="parentLogout()">خروج</button></div><p class="muted">${esc(s.grade)}${isBanned(s)?" • "+banText(s):""}</p><div class="grid"><div class="card">عدد الامتحانات<div class="stat">${at.length}</div></div><div class="card">متوسط المستوى<div class="stat">${avg}%</div></div></div><h3>سجل الامتحانات</h3>`+(at.map(a=>`<div class="exam"><b>${esc(a.title)}</b><p>${a.visible?"الدرجة: "+getAttemptScore(a)+"/"+a.total:"النتيجة قيد المراجعة"}</p><p class="small">${new Date(a.submittedAt).toLocaleString("ar-EG")}</p></div>`).join("")||"<p>لم يؤد الطالب أي امتحان بعد.</p>");
+}
+
+/* ===== طرد تلقائي عند الحذف أو الحظر ===== */
+function enforceStudent(){
+if(!data.student)return;
+let s=data.students.find(x=>x.id===data.student.id);
+if(s&&!isBanned(s)){data.student=s;return;}
+let msg=s?"تم حظرك من المنصة. "+banText(s):"تم حذف حسابك من المنصة.";
+clearInterval(timerInterval);activeExam=null;submitting=false;
+data.student=null;localStorage.setItem(KEY,JSON.stringify(data));
+show("home");alert(msg);
+}
+setInterval(()=>{if(syncReady)enforceStudent();},5000);
+
+/* ===== إدارة الطلاب للمدرس ===== */
+function deleteStudent(id){
+let s=data.students.find(x=>x.id===id);if(!s)return;
+if(!confirm("حذف الطالب "+s.name+" وكل امتحاناته نهائياً؟"))return;
+data.students=data.students.filter(x=>x.id!==id);
+data.attempts=data.attempts.filter(a=>a.studentId!==id);
+save();renderTeacher();
+}
+function banStudent(id){
+let s=data.students.find(x=>x.id===id);if(!s)return;
+let t=prompt("نوع الحظر:\n1 = دقائق\n2 = ساعات\n3 = أيام\n4 = شهور\n5 = دائم");
+if(t===null)return;t=t.trim();
+if(t==="5")s.ban={permanent:true,at:Date.now()};
+else{
+let ms={"1":60000,"2":3600000,"3":86400000,"4":2592000000}[t];
+if(!ms){alert("اختيار غير صحيح.");return;}
+let n=Number(prompt("اكتب المدة (رقم):"));
+if(!Number.isFinite(n)||n<=0){alert("مدة غير صحيحة.");return;}
+s.ban={permanent:false,until:Date.now()+n*ms,at:Date.now()};
+}
+save();renderTeacher();
+}
+function unbanStudent(id){let s=data.students.find(x=>x.id===id);if(!s)return;delete s.ban;save();renderTeacher();}
+function resetPass(id){
+let s=data.students.find(x=>x.id===id);if(!s||!confirm("سيُطلب من الطالب إنشاء كلمة مرور جديدة عند أول دخول. متابعة؟"))return;
+delete s.passHash;save();alert("تم.");
+}
+
 /* تشغيل المنصة والمزامنة */
 if(sessionStorage.getItem("teacher")==="yes")show("teacher");
 else show("home");
@@ -971,4 +1081,4 @@ initializeSync();
 
 </script>
 </body>
-</html> 
+</html>
