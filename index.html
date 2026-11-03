@@ -120,6 +120,12 @@ body *{visibility:hidden!important}
 #printCertificate{position:absolute;top:0;right:0;width:100%;max-width:none;margin:0}
 .no-print{display:none!important}
 }
+
+.teacher-nav{position:sticky;top:8px;z-index:5;background:var(--panel,#fff);box-shadow:0 4px 16px rgba(20,35,70,.08)}
+.teacher-nav .actions{display:flex;flex-wrap:wrap;gap:8px}
+.teacher-section-focus{outline:3px solid rgba(45,110,220,.28);outline-offset:5px;border-radius:12px;transition:outline .3s}
+@media(max-width:600px){.teacher-nav{position:static}.teacher-nav .actions button{flex:1 1 45%;min-width:135px}}
+
 </style>
 </head>
 <body>
@@ -228,7 +234,7 @@ body *{visibility:hidden!important}
 </div>
 </div>
 <div id="studentExamArea">
-<h3>الامتحانات المتاحة لصفك</h3><div id="availableExams"></div>
+<div id="studentExamNotifications"></div><h3>الامتحانات المتاحة لصفك</h3><div id="availableExams"></div>
 <h3>نتائجي</h3><div id="myResults"></div>
 </div>
 </div>
@@ -261,13 +267,21 @@ body *{visibility:hidden!important}
 
 <section id="teacher" class="hidden">
 <div class="row"><h2>لوحة تحكم مستر محمود خاطر</h2><button class="danger" onclick="teacherLogout()">خروج</button></div>
+<div class="panel teacher-nav"><h3>التنقل السريع داخل لوحة المدرس</h3><div class="actions">
+<button class="secondary" onclick="teacherNavigate('teacherCreateExamSection')">📝 إنشاء امتحان</button>
+<button class="secondary" onclick="teacherNavigate('teacherExamsSection')">📋 الامتحانات</button>
+<button class="secondary" onclick="teacherNavigate('teacherHomeworkSection')">📚 واجبات الطلاب</button>
+<button class="secondary" onclick="teacherNavigate('teacherStudentsSection')">👨‍🎓 بيانات الطلاب كاملة</button>
+<button class="secondary" onclick="teacherNavigate('teacherRetakesSection')">🔁 طلبات الإعادة</button>
+<button class="secondary" onclick="teacherNavigate('teacherMessagesSection')">✉️ رسائل الدعم</button>
+</div></div>
 <div class="grid">
 <div class="card">عدد الطلاب المسجلين<div class="stat" id="studentCount">0</div></div>
 <div class="card">عدد الامتحانات<div class="stat" id="examCount">0</div></div>
 <div class="card">عدد المحاولات<div class="stat" id="attemptCount">0</div></div>
 <div class="card">رسائل الدعم<div class="stat" id="messageCount">0</div></div>
 </div>
-<div class="panel">
+<div id="teacherCreateExamSection" class="panel">
 <h2>إنشاء امتحان جديد</h2>
 <label>عنوان الامتحان</label><input id="examTitle" placeholder="Unit 1 Exam">
 <label>المرحلة المستهدفة</label>
@@ -282,8 +296,8 @@ body *{visibility:hidden!important}
 <div id="questionBuilder"></div>
 <button class="primary" onclick="publishExam()">نشر الامتحان</button><p id="examError"></p>
 </div>
-<h2>إدارة الامتحانات</h2><div id="teacherExams"></div>
-<h2>ملفات الطلاب الشخصية والنتائج</h2>
+<div id="teacherExamsSection"><h2>إدارة الامتحانات</h2><div id="teacherExams"></div></div>
+<div id="teacherStudentsSection"><h2>ملفات الطلاب الشخصية والنتائج</h2>
 <div class="panel">
 <label for="teacherStudentSearch">🔎 البحث باسم الطالب</label>
 <input id="teacherStudentSearch" type="search" placeholder="اكتب اسم الطالب للبحث..." oninput="renderTeacherStudents()">
@@ -295,10 +309,10 @@ body *{visibility:hidden!important}
 <option>الأول الثانوي</option><option>الثاني الثانوي</option>
 </select>
 </div>
-<div id="teacherResults"></div>
-<h2>📚 واجبات الطلاب</h2><div class="notice">راجع صور الواجبات، وحدد حالتها، واكتب الأخطاء أو الملاحظات ثم أرسل التصحيح للطالب وولي الأمر.</div><div id="teacherHomeworks"></div>
-<h2>طلبات إعادة الامتحان</h2><div class="notice">يمكنك قبول الطلب أو رفضه مع توضيح السبب للطالب.</div><div id="teacherRetakeRequests"></div>
-<h2>رسائل وشكاوى الدعم الفني</h2><div class="notice">هذه الرسائل معروضة داخل لوحة المدرس فقط.</div><div id="teacherMessages"></div>
+<div id="teacherResults"></div></div>
+<div id="teacherHomeworkSection"><h2>📚 واجبات الطلاب</h2><div class="notice">راجع صور الواجبات، وحدد حالتها، واكتب الأخطاء أو الملاحظات ثم أرسل التصحيح للطالب وولي الأمر.</div><div id="teacherHomeworks"></div></div>
+<div id="teacherRetakesSection"><h2>طلبات إعادة الامتحان</h2><div class="notice">يمكنك قبول الطلب أو رفضه مع توضيح السبب للطالب.</div><div id="teacherRetakeRequests"></div></div>
+<div id="teacherMessagesSection"><h2>رسائل وشكاوى الدعم الفني</h2><div class="notice">هذه الرسائل معروضة داخل لوحة المدرس فقط.</div><div id="teacherMessages"></div></div>
 </section>
 
 <section id="reviewAttempt" class="hidden">
@@ -488,6 +502,9 @@ if(!s)return;
 document.getElementById("welcome").textContent="أهلاً بك "+s.name;
 document.getElementById("studentInfo").textContent=s.grade+" • كود ولي الأمر: "+(s.parentCode||"-");
 let exams=data.exams.filter(e=>e.published&&(e.grade==="الكل"||e.grade===s.grade));
+let notifications=exams.filter(e=>!data.attempts.some(a=>a.examId===e.id&&a.studentId===s.id));
+let noticeBox=document.getElementById("studentExamNotifications");
+if(noticeBox)noticeBox.innerHTML=notifications.length?`<div class="notice" style="border-right:5px solid #e5a323"><h3>🔔 إشعارات الامتحانات الجديدة (${notifications.length})</h3><p>يوجد امتحان أو أكثر متاح لمرحلتك الدراسية. افتح الامتحان للبدء.</p>${notifications.map(e=>`<div class="exam"><b>${esc(e.title)}</b> <span class="tag">${esc(e.grade==="الكل"?s.grade:e.grade)}</span><p class="small">${e.publishedAt?"تاريخ النشر: "+new Date(e.publishedAt).toLocaleString("ar-EG"):"متاح الآن"}</p><button class="primary" onclick="startExam('${e.id}')">ابدأ الامتحان الآن</button></div>`).join("")}</div>`:"";
 let box=document.getElementById("availableExams");box.innerHTML="";
 if(!exams.length)box.innerHTML='<div class="notice">لا يوجد امتحان متاح لمرحلتك الدراسية حاليًا.</div>';
 exams.forEach(e=>{
@@ -671,7 +688,7 @@ questions.push(obj);
 });
 let invalidDuration=Object.values(durationByGrade).some(x=>!Number.isFinite(x)||x<1);
 if(!title||invalidDuration||!questions.length||invalid){document.getElementById("examError").textContent="راجع البيانات: تأكد من كتابة جميع الأسئلة والاختيارات والإجابات الصحيحة والدرجات.";return;}
-data.exams.unshift({id:"exam_"+Date.now(),title,grade,duration:durationByGrade[grade]||30,durationByGrade,questions,published:true,visible:document.getElementById("resultVisibility").value==="yes"});
+data.exams.unshift({id:"exam_"+Date.now(),title,grade,duration:durationByGrade[grade]||30,durationByGrade,questions,published:true,publishedAt:Date.now(),visible:document.getElementById("resultVisibility").value==="yes"});
 save();document.getElementById("examTitle").value="";document.getElementById("questionBuilder").innerHTML="";questionNumber=0;document.getElementById("examError").textContent="تم نشر الامتحان بنجاح.";renderTeacher();
 }
 function getDuration(exam,grade){return Number(exam.durationByGrade?.[grade]||exam.duration||30);}
@@ -806,6 +823,13 @@ box.innerHTML=requests.map(r=>`<div class="exam">
 ${r.teacherNote?`<p>رد المدرس: ${esc(r.teacherNote)}</p>`:""}
 ${r.status==="pending"?`<div class="actions"><button class="success" onclick="decideRetakeRequest('${r.id}','approved')">قبول الطلب</button><button class="danger" onclick="decideRetakeRequest('${r.id}','rejected')">رفض الطلب</button></div>`:""}
 </div>`).join("")||"<p>لا توجد طلبات إعادة امتحان.</p>";
+}
+
+function teacherNavigate(sectionId){
+ const target=document.getElementById(sectionId);if(!target)return;
+ target.scrollIntoView({behavior:"smooth",block:"start"});
+ target.classList.add("teacher-section-focus");
+ setTimeout(()=>target.classList.remove("teacher-section-focus"),1100);
 }
 
 function renderTeacher(){
