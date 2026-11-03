@@ -502,15 +502,18 @@ document.getElementById("studentDashboard").classList.toggle("hidden",!s);
 if(!s)return;
 document.getElementById("welcome").textContent="أهلاً بك "+s.name;
 document.getElementById("studentInfo").textContent=s.grade+" • كود ولي الأمر: "+(s.parentCode||"-");
-let exams=data.exams.filter(e=>e.published&&(e.grade==="الكل"||e.grade===s.grade));
-let notifications=exams.filter(e=>!data.attempts.some(a=>a.examId===e.id&&a.studentId===s.id));
+// الامتحان المعتمد للإعادة يظل متاحاً لصاحبه حتى لو أوقف المدرس نشره لباقي الطلاب.
+let approvedRetakeRequests=(data.retakeRequests||[]).filter(r=>r.studentId===s.id&&r.status==="approved"&&!r.usedAt);
+let approvedRetakeExamIds=new Set(approvedRetakeRequests.map(r=>r.examId));
+let exams=data.exams.filter(e=>(e.published||approvedRetakeExamIds.has(e.id))&&(e.grade==="الكل"||e.grade===s.grade));
+let notifications=exams.filter(e=>!data.attempts.some(a=>a.examId===e.id&&a.studentId===s.id)||approvedRetakeExamIds.has(e.id));
 let noticeBox=document.getElementById("studentExamNotifications");
 if(noticeBox)noticeBox.innerHTML=notifications.length?`<div class="notice" style="border-right:5px solid #e5a323"><h3>🔔 إشعارات الامتحانات الجديدة (${notifications.length})</h3><p>يوجد امتحان أو أكثر متاح لمرحلتك الدراسية. افتح الامتحان للبدء.</p>${notifications.map(e=>`<div class="exam"><b>${esc(e.title)}</b> <span class="tag">${esc(e.grade==="الكل"?s.grade:e.grade)}</span><p class="small">${e.publishedAt?"تاريخ النشر: "+new Date(e.publishedAt).toLocaleString("ar-EG"):"متاح الآن"}</p><button class="primary" onclick="startExam('${e.id}')">ابدأ الامتحان الآن</button></div>`).join("")}</div>`:"";
 let box=document.getElementById("availableExams");box.innerHTML="";
 if(!exams.length)box.innerHTML='<div class="notice">لا يوجد امتحان متاح لمرحلتك الدراسية حاليًا.</div>';
 exams.forEach(e=>{
 let previousAttempts=data.attempts.filter(a=>a.examId===e.id&&a.studentId===s.id);
-let approvedRetake=data.retakeRequests.some(r=>r.studentId===s.id&&r.examId===e.id&&r.status==="approved"&&!r.usedAt);
+let approvedRetake=approvedRetakeRequests.some(r=>r.examId===e.id);
 let attempted=previousAttempts.length>0&&!approvedRetake;
 let duration=getDuration(e,s.grade);
 let actionLabel=approvedRetake?"إعادة الامتحان (تمت الموافقة)":(attempted?"تم التسليم بالفعل":"بدء الامتحان");
@@ -705,11 +708,11 @@ return leaves;
 }
 function startExam(id){
 let e=data.exams.find(x=>x.id===id);if(!e||!data.student)return;
-if(!e.published||(e.grade!=="الكل"&&e.grade!==data.student.grade)){alert("هذا الامتحان غير متاح لمرحلتك.");return;}
-let previousAttempts=data.attempts.filter(a=>a.examId===id&&a.studentId===data.student.id);
-let approvedRequest=data.retakeRequests
+let approvedRequest=(data.retakeRequests||[])
 .filter(r=>r.studentId===data.student.id&&r.examId===id&&r.status==="approved"&&!r.usedAt)
-.sort((a,b)=>b.createdAt-a.createdAt)[0]||null;
+.sort((a,b)=>(Number(b.decidedAt||b.createdAt)||0)-(Number(a.decidedAt||a.createdAt)||0))[0]||null;
+if((!e.published&&!approvedRequest)||(e.grade!=="الكل"&&e.grade!==data.student.grade)){alert("هذا الامتحان غير متاح لمرحلتك أو لم تصدر موافقة إعادة الامتحان.");return;}
+let previousAttempts=data.attempts.filter(a=>a.examId===id&&a.studentId===data.student.id);
 if(previousAttempts.length&&!approvedRequest){alert("لقد أديت هذا الامتحان بالفعل. يمكنك طلب إعادة الامتحان من قسم نتائجي.");return;}
 activeRetakeRequest=approvedRequest;
 activeExam=e;endTime=Date.now()+getDuration(e,data.student.grade)*60000;submitting=false;
@@ -811,6 +814,11 @@ let note=prompt(decision==="approved"?"اكتب ملاحظة للطالب (اخ�
 if(note===null)return;
 if(decision==="rejected"&&!note.trim()){alert("يرجى كتابة سبب الرفض.");return;}
 req.status=decision;req.teacherNote=note.trim();req.decidedAt=Date.now();req.teacherArchived=true;
+if(decision==="approved"){
+// تثبيت الموافقة على طلب الطالب نفسه دون إعادة نشر الامتحان لباقي الصف.
+req.usedAt=null;
+req.approvedAt=Date.now();
+}
 save();renderTeacher();
 }
 function renderRetakeRequests(){
