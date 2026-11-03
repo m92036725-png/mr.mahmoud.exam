@@ -364,7 +364,7 @@ body *{visibility:hidden!important}
 <label>اسم الطالب</label><input id="supportName" placeholder="اسمك">
 <label>موضوع الرسالة</label><input id="supportSubject" placeholder="الموضوع">
 <label>تفاصيل المشكلة</label><textarea id="supportMessage" placeholder="اكتب رسالتك..."></textarea>
-<button class="primary" onclick="sendSupport()">إرسال الرسالة</button><p id="supportFeedback"></p>
+<button class="primary" onclick="sendSupport()">إرسال الرسالة</button><p id="supportFeedback"></p><hr><div id="supportReplies"></div>
 </div>
 </section>
 
@@ -428,6 +428,7 @@ if(id==="homework")renderHomeworkMode();
 if(id==="teacher")renderTeacher();
 if(id==="certificates")renderCertificates();
 if(id==="parent")renderParent();
+if(id==="support")renderSupportReplies();
 closeSideMenu();
 }
 
@@ -809,12 +810,12 @@ if(!req)return;
 let note=prompt(decision==="approved"?"اكتب ملاحظة للطالب (اختياري):":"اكتب سبب رفض الطلب:");
 if(note===null)return;
 if(decision==="rejected"&&!note.trim()){alert("يرجى كتابة سبب الرفض.");return;}
-req.status=decision;req.teacherNote=note.trim();req.decidedAt=Date.now();
+req.status=decision;req.teacherNote=note.trim();req.decidedAt=Date.now();req.teacherArchived=true;
 save();renderTeacher();
 }
 function renderRetakeRequests(){
 let box=document.getElementById("teacherRetakeRequests");if(!box)return;
-let requests=data.retakeRequests||[];
+let requests=(data.retakeRequests||[]).filter(r=>r.status==="pending"&&!r.teacherArchived);
 box.innerHTML=requests.map(r=>`<div class="exam">
 <div class="row"><b>${esc(r.studentName)}</b><span class="tag">${retakeStatusText(r.status)}</span></div>
 <p>الصف: ${esc(r.studentGrade)} • الامتحان: ${esc(r.title)}</p>
@@ -837,12 +838,12 @@ if(sessionStorage.getItem("teacher")!=="yes"){show("teacherLogin");return;}
 document.getElementById("studentCount").textContent=data.students.length;
 document.getElementById("examCount").textContent=data.exams.length;
 document.getElementById("attemptCount").textContent=data.attempts.length;
-document.getElementById("messageCount").textContent=data.messages.length;
+document.getElementById("messageCount").textContent=(data.messages||[]).filter(m=>!m.teacherReply&&!m.teacherArchived).length;
 document.getElementById("teacherExams").innerHTML=data.exams.map(e=>`<div class="exam"><h3>${esc(e.title)}</h3><p>${esc(e.grade)} • ${e.grade==="الكل"?"مدة مختلفة حسب المرحلة":getDuration(e,e.grade)+" دقيقة"}</p><p>عدد الأسئلة: ${e.questions.length}</p><button class="secondary" onclick="toggleExam('${e.id}')">${e.published?"إيقاف النشر":"إعادة النشر"}</button> <button class="danger" onclick="deleteExam('${e.id}')">حذف</button></div>`).join("")||"لا توجد امتحانات.";
 renderTeacherStudents();
 renderRetakeRequests();
 renderTeacherHomeworks();
-document.getElementById("teacherMessages").innerHTML=data.messages.map(m=>`<div class="exam"><div class="row"><b>${esc(m.name||"طالب")}</b><span class="tag">${new Date(m.createdAt||Date.now()).toLocaleString("ar-EG")}</span></div><h4>${esc(m.subject)}</h4><p>${esc(m.message)}</p><button class="danger" onclick="deleteMessage('${m.id}')">حذف الرسالة</button></div>`).join("")||"لا توجد رسائل أو شكاوى.";
+document.getElementById("teacherMessages").innerHTML=data.messages.filter(m=>!m.teacherReply&&!m.teacherArchived).map(m=>`<div class="exam"><div class="row"><b>${esc(m.name||"طالب")}</b><span class="tag">${new Date(m.createdAt||Date.now()).toLocaleString("ar-EG")}</span></div><h4>${esc(m.subject)}</h4><p>${esc(m.message)}</p><label>الرد على الطالب</label><textarea id="supportReply_${m.id}" placeholder="اكتب ردك هنا..."></textarea><button class="primary" onclick="replySupport('${m.id}')">إرسال الرد وإخفاء الرسالة</button></div>`).join("")||"لا توجد رسائل دعم تحتاج إلى رد.";
 }
 function renderTeacherStudents(){
 let box=document.getElementById("teacherResults");
@@ -914,10 +915,25 @@ function toggleExam(id){let e=data.exams.find(x=>x.id===id);if(!e)return;e.publi
 function deleteExam(id){if(!confirm("هل تريد حذف الامتحان؟"))return;data.exams=data.exams.filter(e=>e.id!==id);save();renderTeacher();}
 function toggleResult(id){let a=data.attempts.find(x=>x.id===id);if(!a)return;a.visible=!a.visible;save();renderTeacher();}
 function deleteMessage(id){if(!confirm("هل تريد حذف هذه الرسالة؟"))return;data.messages=data.messages.filter(m=>m.id!==id);save();renderTeacher();}
+function replySupport(id){
+ if(sessionStorage.getItem("teacher")!=="yes"){alert("يجب تسجيل دخول المدرس.");return;}
+ const m=(data.messages||[]).find(x=>x.id===id);if(!m)return;
+ const reply=document.getElementById("supportReply_"+id)?.value.trim()||"";
+ if(!reply){alert("اكتب الرد قبل الإرسال.");return;}
+ m.teacherReply=reply;m.repliedAt=Date.now();m.teacherArchived=true;
+ save();renderTeacher();alert("تم إرسال الرد، واختفت الرسالة من قائمة المدرس.");
+}
+function renderSupportReplies(){
+ const box=document.getElementById("supportReplies");if(!box)return;
+ const sid=data.student?.id;
+ const replies=(data.messages||[]).filter(m=>sid&&m.studentId===sid&&m.teacherReply);
+ box.innerHTML=replies.length?"<h3>📩 ردود الدعم الفني</h3>"+replies.map(m=>`<div class="notice"><b>${esc(m.subject)}</b><p>${esc(m.teacherReply)}</p><p class="small">${m.repliedAt?new Date(m.repliedAt).toLocaleString("ar-EG"):""}</p></div>`).join(""):"";
+}
+
 function sendSupport(){
 let name=document.getElementById("supportName").value.trim()||(data.student?.name||"طالب"),subject=document.getElementById("supportSubject").value.trim(),message=document.getElementById("supportMessage").value.trim();
 if(!subject||!message){document.getElementById("supportFeedback").textContent="أكمل بيانات الرسالة.";return;}
-data.messages.unshift({id:"message_"+Date.now(),name,subject,message,createdAt:Date.now()});save();
+data.messages.unshift({id:"message_"+Date.now(),name,subject,message,studentId:data.student?.id||null,createdAt:Date.now()});save();
 document.getElementById("supportFeedback").textContent="تم إرسال الشكوى بنجاح.";document.getElementById("supportSubject").value="";document.getElementById("supportMessage").value="";
 }
 
@@ -1280,7 +1296,7 @@ function renderStudentHomeworks(targetId){
 }
 function renderTeacherHomeworks(){
  const box=document.getElementById("teacherHomeworks");if(!box)return;
- const list=(data.homeworks||[]).slice().sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+ const list=(data.homeworks||[]).filter(h=>h.status==="pending"&&!h.teacherArchived).slice().sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
  box.innerHTML=list.map(h=>`<div class="exam"><div class="row"><h3>${esc(h.studentName||"طالب")}</h3><span class="tag">${esc(h.grade||"")}</span></div><p>تاريخ الإرسال: ${new Date(h.createdAt||Date.now()).toLocaleString("ar-EG")}</p>${h.note?`<p><b>ملاحظة الطالب:</b> ${esc(h.note)}</p>`:""}<div class="grid">${homeworkImagesHtml(h)}</div><p><b>الحالة الحالية:</b> ${homeworkStatus(h)}</p><label>تقييم الواجب</label><select id="hwStatus_${h.id}"><option value="correct" ${h.status==="correct"?"selected":""}>الواجب صحيح</option><option value="errors" ${h.status==="errors"?"selected":""}>الواجب به أخطاء</option></select><label>الأخطاء / ملاحظات المدرس</label><textarea id="hwNote_${h.id}" placeholder="اكتب الأخطاء بالتفصيل حتى تظهر للطالب وولي الأمر...">${esc(h.teacherNote||"")}</textarea><button class="primary" onclick="reviewHomework('${h.id}')">إرسال التصحيح للطالب وولي الأمر</button></div>`).join("")||'<div class="notice">لا توجد واجبات مرسلة حتى الآن.</div>';
 }
 function reviewHomework(id){
@@ -1288,7 +1304,7 @@ function reviewHomework(id){
  const status=document.getElementById("hwStatus_"+id)?.value;
  const note=document.getElementById("hwNote_"+id)?.value.trim()||"";
  if(status==="errors"&&!note){alert("اكتب الأخطاء التي وجدتها في الواجب قبل الإرسال.");return;}
- h.status=status;h.teacherNote=status==="correct"?(note||"الواجب صحيح، أحسنت!"):note;h.reviewedAt=Date.now();
+ h.status=status;h.teacherNote=status==="correct"?(note||"الواجب صحيح، أحسنت!"):note;h.reviewedAt=Date.now();h.teacherArchived=true;
  save();renderTeacherHomeworks();alert("تم إرسال تصحيح الواجب بنجاح، وسيظهر للطالب وولي الأمر.");
 }
 /* ================= نهاية نظام الواجبات ================= */
