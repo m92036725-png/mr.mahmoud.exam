@@ -267,6 +267,7 @@ body *{visibility:hidden!important}
 </div>
 <h2>إدارة الامتحانات</h2><div id="teacherExams"></div>
 <h2>ملفات الطلاب الشخصية والنتائج</h2><div id="teacherResults"></div>
+<h2>طلبات إعادة الامتحان</h2><div class="notice">يمكنك قبول الطلب أو رفضه مع توضيح السبب للطالب.</div><div id="teacherRetakeRequests"></div>
 <h2>رسائل وشكاوى الدعم الفني</h2><div class="notice">هذه الرسائل معروضة داخل لوحة المدرس فقط.</div><div id="teacherMessages"></div>
 </section>
 
@@ -358,7 +359,8 @@ const TEACHER_PASSWORD="mahmoudkhater1983";
 const KEY="mahmoud_khater_platform_v2";
 const GRADES=["الرابع الابتدائي","الخامس الابتدائي","السادس الابتدائي","الأول الإعدادي","الثاني الإعدادي","الثالث الإعدادي","الأول الثانوي","الثاني الثانوي"];
 
-let data=loadData(),questionNumber=0,activeExam=null,timerInterval=null,endTime=null,submitting=false;
+let data=loadData(),questionNumber=0,activeExam=null,timerInterval=null,endTime=null,submitting=false,activeRetakeRequest=null;
+if(!Array.isArray(data.retakeRequests))data.retakeRequests=[];
 
 function loadData(){
 try{
@@ -462,7 +464,14 @@ let duration=getDuration(e,s.grade);
 box.innerHTML+=`<div class="exam"><h3>${esc(e.title)}</h3><span class="tag">${esc(e.grade)}</span> <span class="tag">${duration} دقيقة</span><button class="primary" ${attempted?"disabled":""} onclick="startExam('${e.id}')">${attempted?"تم التسليم بالفعل":"بدء الامتحان"}</button></div>`;
 });
 let mine=data.attempts.filter(a=>a.studentId===s.id);
-document.getElementById("myResults").innerHTML=mine.map(a=>`<div class="exam"><b>${esc(a.title)}</b><p>${a.visible?"الدرجة: "+getAttemptScore(a)+"/"+a.total:"النتيجة قيد المراجعة"}</p></div>`).join("")||"<p>لا توجد نتائج.</p>";
+let latestByExam={};mine.forEach(a=>{if(!latestByExam[a.examId]||a.submittedAt>latestByExam[a.examId].submittedAt)latestByExam[a.examId]=a;});
+document.getElementById("myResults").innerHTML=mine.map(a=>{
+let req=data.retakeRequests.find(r=>r.originalAttemptId===a.id);
+let isLatest=latestByExam[a.examId]?.id===a.id;
+let requestButton=isLatest&&!req?`<button class="secondary" onclick="requestRetake('${a.id}')">طلب إعادة الامتحان</button>`:"";
+let status=req?`<p class="notice">حالة طلب الإعادة: <b>${retakeStatusText(req.status)}</b>${req.teacherNote?'<br>رد المدرس: '+esc(req.teacherNote):''}</p>`:"";
+return `<div class="exam"><b>${esc(a.title)}</b><p>${a.visible?"الدرجة: "+getAttemptScore(a)+"/"+a.total:"النتيجة قيد المراجعة"}</p>${status}${requestButton}</div>`;
+}).join("")||"<p>لا توجد نتائج.</p>";
 }
 function showProfile(){
 document.getElementById("studentProfile").classList.remove("hidden");
@@ -590,7 +599,12 @@ return leaves;
 function startExam(id){
 let e=data.exams.find(x=>x.id===id);if(!e||!data.student)return;
 if(!e.published||(e.grade!=="الكل"&&e.grade!==data.student.grade)){alert("هذا الامتحان غير متاح لمرحلتك.");return;}
-if(data.attempts.some(a=>a.examId===id&&a.studentId===data.student.id)){alert("لقد أديت هذا الامتحان بالفعل.");return;}
+let previousAttempts=data.attempts.filter(a=>a.examId===id&&a.studentId===data.student.id);
+let approvedRequest=data.retakeRequests
+.filter(r=>r.studentId===data.student.id&&r.examId===id&&r.status==="approved"&&!r.usedAt)
+.sort((a,b)=>b.createdAt-a.createdAt)[0]||null;
+if(previousAttempts.length&&!approvedRequest){alert("لقد أديت هذا الامتحان بالفعل. يمكنك طلب إعادة الامتحان من قسم نتائجي.");return;}
+activeRetakeRequest=approvedRequest;
 activeExam=e;endTime=Date.now()+getDuration(e,data.student.grade)*60000;submitting=false;
 document.querySelectorAll("main>section").forEach(x=>x.classList.add("hidden"));document.getElementById("takingExam").classList.remove("hidden");document.getElementById("takingTitle").textContent=e.title;
 let box=document.getElementById("examQuestions");box.innerHTML="";
@@ -644,14 +658,65 @@ else if(leaf.kind==="correct"){let q=exam.questions[leaf.parent];earned=normaliz
 else if(leaf.kind==="rewrite"){let q=exam.questions[leaf.parent];earned=normalizeAnswer(answer)===normalizeAnswer(q.expected)?leaf.points:0;}
 manualScores.push(earned);if(earned!==null)score+=earned;
 });
-data.attempts.push({id:"attempt_"+Date.now(),examId:exam.id,studentId:s.id,studentName:s.name,studentGrade:s.grade,title:exam.title,score,total,answers,manualScores,visible:exam.visible,submittedAt:Date.now(),automatic:auto,reviewed:manualScores.every(x=>x!==null)});
+let newAttempt={id:"attempt_"+Date.now(),examId:exam.id,studentId:s.id,studentName:s.name,studentGrade:s.grade,title:exam.title,score,total,answers,manualScores,visible:exam.visible,submittedAt:Date.now(),automatic:auto,reviewed:manualScores.every(x=>x!==null)};
+if(activeRetakeRequest){
+newAttempt.retakeOf=activeRetakeRequest.originalAttemptId;
+newAttempt.retakeRequestId=activeRetakeRequest.id;
+activeRetakeRequest.usedAt=Date.now();
+activeRetakeRequest.status="used";
+}
+data.attempts.push(newAttempt);
 save();try{localStorage.removeItem("exam_progress")}catch(e){}
-activeExam=null;submitting=false;
+activeExam=null;activeRetakeRequest=null;submitting=false;
 if(!auto){show("student");alert("تم تسليم الامتحان وحفظ إجاباتك. الأسئلة المقالية تنتظر تصحيح المدرس.");}
 }
 function getAttemptScore(a){
 if(Number.isFinite(Number(a.finalScore)))return Number(a.finalScore);
 let score=0;if(Array.isArray(a.manualScores))a.manualScores.forEach(v=>{if(v!==null&&v!==undefined)score+=Number(v)||0;});else score=Number(a.score)||0;return score;
+}
+
+function retakeStatusText(status){
+return ({pending:"قيد انتظار موافقة المدرس",approved:"تمت الموافقة - يمكنك إعادة الامتحان",rejected:"تم رفض الطلب",used:"تم استخدام الموافقة وأداء الإعادة"})[status]||"غير محدد";
+}
+function requestRetake(attemptId){
+if(!data.student){alert("سجل دخولك أولاً.");return;}
+let attempt=data.attempts.find(a=>a.id===attemptId&&a.studentId===data.student.id);
+if(!attempt)return;
+if(data.retakeRequests.some(r=>r.originalAttemptId===attemptId)){alert("سبق إرسال طلب لهذا الامتحان.");return;}
+let reason=prompt("اكتب سبب طلب إعادة الامتحان:");
+if(reason===null)return;
+reason=reason.trim();
+if(!reason){alert("اكتب سبب الطلب أولاً.");return;}
+let exam=data.exams.find(e=>e.id===attempt.examId);
+if(!exam){alert("بيانات الامتحان غير موجودة.");return;}
+data.retakeRequests.unshift({
+id:"retake_"+Date.now(),originalAttemptId:attempt.id,examId:attempt.examId,
+studentId:data.student.id,studentName:data.student.name,studentGrade:data.student.grade,
+title:attempt.title,reason,status:"pending",createdAt:Date.now()
+});
+save();renderStudent();alert("تم إرسال طلب إعادة الامتحان إلى المدرس.");
+}
+function decideRetakeRequest(id,decision){
+if(sessionStorage.getItem("teacher")!=="yes"){alert("يجب تسجيل دخول المدرس.");return;}
+let req=data.retakeRequests.find(r=>r.id===id&&r.status==="pending");
+if(!req)return;
+let note=prompt(decision==="approved"?"اكتب ملاحظة للطالب (اختياري):":"اكتب سبب رفض الطلب:");
+if(note===null)return;
+if(decision==="rejected"&&!note.trim()){alert("يرجى كتابة سبب الرفض.");return;}
+req.status=decision;req.teacherNote=note.trim();req.decidedAt=Date.now();
+save();renderTeacher();
+}
+function renderRetakeRequests(){
+let box=document.getElementById("teacherRetakeRequests");if(!box)return;
+let requests=data.retakeRequests||[];
+box.innerHTML=requests.map(r=>`<div class="exam">
+<div class="row"><b>${esc(r.studentName)}</b><span class="tag">${retakeStatusText(r.status)}</span></div>
+<p>الصف: ${esc(r.studentGrade)} • الامتحان: ${esc(r.title)}</p>
+<p><b>سبب الطلب:</b> ${esc(r.reason)}</p>
+<p class="small">تاريخ الطلب: ${new Date(r.createdAt).toLocaleString("ar-EG")}</p>
+${r.teacherNote?`<p>رد المدرس: ${esc(r.teacherNote)}</p>`:""}
+${r.status==="pending"?`<div class="actions"><button class="success" onclick="decideRetakeRequest('${r.id}','approved')">قبول الطلب</button><button class="danger" onclick="decideRetakeRequest('${r.id}','rejected')">رفض الطلب</button></div>`:""}
+</div>`).join("")||"<p>لا توجد طلبات إعادة امتحان.</p>";
 }
 
 function renderTeacher(){
@@ -665,6 +730,7 @@ document.getElementById("teacherResults").innerHTML=data.students.map(s=>{
 let attempts=data.attempts.filter(a=>a.studentId===s.id);
 return `<div class="exam"><div class="row"><h3>${esc(s.name)}</h3><span class="tag">${esc(s.grade)}</span></div><p>رقم ولي الأمر: ${esc(s.phone)}</p><p>تاريخ التسجيل: ${new Date(s.createdAt).toLocaleDateString("ar-EG")}</p><p>عدد الامتحانات: ${attempts.length}</p><p>كود ولي الأمر: <b>${esc(s.parentCode||"-")}</b></p>${isBanned(s)?`<p style="color:#d94b63"><b>${banText(s)}</b></p>`:""}<div class="actions"><button class="secondary" onclick="viewStudentProfile('${s.id}')">فتح الملف الشخصي الكامل</button>${isBanned(s)?`<button class="success" onclick="unbanStudent('${s.id}')">فك الحظر</button>`:`<button class="danger" onclick="banStudent('${s.id}')">حظر</button>`}<button class="secondary" onclick="resetPass('${s.id}')">إعادة تعيين الباسورد</button><button class="danger" onclick="deleteStudent('${s.id}')">حذف الطالب</button></div>${attempts.map(a=>`<div class="notice"><b>${esc(a.title)}</b><br>الدرجة الحالية: ${getAttemptScore(a)}/${a.total}<br>${a.reviewed?"تم التصحيح":"توجد إجابات تحتاج إلى مراجعة"}<br>${new Date(a.submittedAt).toLocaleString("ar-EG")}<div class="actions"><button class="secondary" onclick="reviewAttempt('${a.id}')">عرض الإجابات وتصحيحها</button><button class="secondary" onclick="editAttemptScore('${a.id}')">تعديل الدرجة النهائية</button><button class="secondary" onclick="toggleResult('${a.id}')">${a.visible?"إخفاء النتيجة":"إظهار النتيجة"}</button></div></div>`).join("")}</div>`;
 }).join("")||"لا يوجد طلاب.";
+renderRetakeRequests();
 document.getElementById("teacherMessages").innerHTML=data.messages.map(m=>`<div class="exam"><div class="row"><b>${esc(m.name||"طالب")}</b><span class="tag">${new Date(m.createdAt||Date.now()).toLocaleString("ar-EG")}</span></div><h4>${esc(m.subject)}</h4><p>${esc(m.message)}</p><button class="danger" onclick="deleteMessage('${m.id}')">حذف الرسالة</button></div>`).join("")||"لا توجد رسائل أو شكاوى.";
 }
 function editAttemptScore(id){
@@ -861,7 +927,8 @@ return {
 students:data.students||[],
 exams:data.exams||[],
 attempts:data.attempts||[],
-messages:data.messages||[]
+messages:data.messages||[],
+retakeRequests:data.retakeRequests||[]
 };
 }
 
@@ -922,6 +989,7 @@ data.students=Array.isArray(row.data.students)?row.data.students:[];
 data.exams=Array.isArray(row.data.exams)?row.data.exams:[];
 data.attempts=Array.isArray(row.data.attempts)?row.data.attempts:[];
 data.messages=Array.isArray(row.data.messages)?row.data.messages:[];
+data.retakeRequests=Array.isArray(row.data.retakeRequests)?row.data.retakeRequests:[];
 localStorage.setItem(KEY,JSON.stringify(data));
 syncApplying=false;
 syncLastUpdated=row.updated_at||null;
@@ -953,12 +1021,12 @@ const cloudHasData=
 (cloud.students||[]).length+
 (cloud.exams||[]).length+
 (cloud.attempts||[]).length+
-(cloud.messages||[]).length>0;
+(cloud.messages||[]).length+(cloud.retakeRequests||[]).length>0;
 const localHasData=
 (data.students||[]).length+
 (data.exams||[]).length+
 (data.attempts||[]).length+
-(data.messages||[]).length>0;
+(data.messages||[]).length+(data.retakeRequests||[]).length>0;
 
 if(cloudHasData||!localHasData){
 applyCloudData(remote);
@@ -975,12 +1043,12 @@ const cloudHasData=
 (cloud.students||[]).length+
 (cloud.exams||[]).length+
 (cloud.attempts||[]).length+
-(cloud.messages||[]).length>0;
+(cloud.messages||[]).length+(cloud.retakeRequests||[]).length>0;
 const localHasData=
 (data.students||[]).length+
 (data.exams||[]).length+
 (data.attempts||[]).length+
-(data.messages||[]).length>0;
+(data.messages||[]).length+(data.retakeRequests||[]).length>0;
 if(!cloudHasData&&localHasData){
 await writeCloudData();
 }else{
