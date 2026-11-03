@@ -151,6 +151,7 @@ body *{visibility:hidden!important}
 <div class="menu-spacer"></div>
 <button onclick="menuGo('home')">🏠 الصفحة الرئيسية</button>
 <button onclick="menuGo('student')">👨‍🎓 الطلاب</button>
+<button onclick="menuGo('homework')">📚 وضع الواجبات</button>
 <button onclick="menuGo('translator')">🌐 الترجمة</button>
 <button onclick="menuGo('support')">🎧 الدعم الفني</button>
 <button onclick="menuGo('teacherLogin')">👨‍🏫 وضع المدرس</button>
@@ -215,6 +216,7 @@ body *{visibility:hidden!important}
 <div class="actions">
 <button class="secondary" onclick="showProfile()">👤 ملفي الشخصي</button>
 <button class="secondary" onclick="hideProfile()">الامتحانات</button>
+<button class="secondary" onclick="show('homework')">📚 واجباتي</button>
 <button class="secondary" onclick="show('certificates')">🏆 شهاداتي</button>
 </div>
 <div id="studentProfile" class="hidden">
@@ -222,13 +224,28 @@ body *{visibility:hidden!important}
 <h2>👤 ملفي الشخصي</h2>
 <div id="profileDetails"></div><hr>
 <h3>📊 سجل الامتحانات والدرجات</h3>
-<div id="profileHistory"></div>
+<div id="profileHistory"></div><hr><h3>📚 الواجبات</h3><div id="profileHomeworks"></div>
 </div>
 </div>
 <div id="studentExamArea">
 <h3>الامتحانات المتاحة لصفك</h3><div id="availableExams"></div>
 <h3>نتائجي</h3><div id="myResults"></div>
 </div>
+</div>
+</section>
+
+<section id="homework" class="hidden">
+<div class="panel" style="max-width:850px;margin:auto">
+<div class="row"><h2>📚 وضع الواجبات</h2><button class="secondary" onclick="show('student')">العودة</button></div>
+<div id="homeworkStudentArea">
+<p class="notice">ارفع صور صفحات الواجب بوضوح، ويمكنك اختيار أكثر من صورة في المرة الواحدة.</p>
+<label>صور صفحات الواجب</label>
+<input id="homeworkImages" type="file" accept="image/*" multiple onchange="previewHomeworkImages()">
+<div id="homeworkPreview" class="grid"></div><div id="homeworkStudentList"></div>
+<label>ملاحظات للمدرس (اختياري)</label><textarea id="homeworkNote" placeholder="اكتب أي ملاحظة تريد إرسالها للمدرس..."></textarea>
+<button class="primary" onclick="submitHomework()">إرسال الواجب للمدرس</button><p id="homeworkFeedback"></p>
+</div>
+<div id="homeworkLoginNotice" class="notice hidden">سجل دخولك بحساب الطالب أولاً حتى تتمكن من إرسال الواجب.</div>
 </div>
 </section>
 
@@ -279,6 +296,7 @@ body *{visibility:hidden!important}
 </select>
 </div>
 <div id="teacherResults"></div>
+<h2>📚 واجبات الطلاب</h2><div class="notice">راجع صور الواجبات، وحدد حالتها، واكتب الأخطاء أو الملاحظات ثم أرسل التصحيح للطالب وولي الأمر.</div><div id="teacherHomeworks"></div>
 <h2>طلبات إعادة الامتحان</h2><div class="notice">يمكنك قبول الطلب أو رفضه مع توضيح السبب للطالب.</div><div id="teacherRetakeRequests"></div>
 <h2>رسائل وشكاوى الدعم الفني</h2><div class="notice">هذه الرسائل معروضة داخل لوحة المدرس فقط.</div><div id="teacherMessages"></div>
 </section>
@@ -373,6 +391,7 @@ const GRADES=["الرابع الابتدائي","الخامس الابتدائي
 
 let data=loadData(),questionNumber=0,activeExam=null,timerInterval=null,endTime=null,submitting=false,activeRetakeRequest=null;
 if(!Array.isArray(data.retakeRequests))data.retakeRequests=[];
+if(!Array.isArray(data.homeworks))data.homeworks=[];
 
 function loadData(){
 try{
@@ -391,6 +410,7 @@ document.querySelectorAll("main>section").forEach(x=>x.classList.add("hidden"));
 let target=document.getElementById(id);
 if(target)target.classList.remove("hidden");
 if(id==="student")renderStudent();
+if(id==="homework")renderHomeworkMode();
 if(id==="teacher")renderTeacher();
 if(id==="certificates")renderCertificates();
 if(id==="parent")renderParent();
@@ -490,6 +510,7 @@ let reviewBlock=canReview?`<button class="secondary" onclick="toggleStudentRevie
 let pendingReview=!a.reviewed?'<p class="small">ستظهر مراجعة الإجابات بعد انتهاء تصحيح جميع الأسئلة.</p>':"";
 return `<div class="exam"><b>${esc(a.title)}</b><p>${a.visible?"الدرجة: "+getAttemptScore(a)+"/"+a.total:"النتيجة قيد المراجعة"}</p>${status}${reviewBlock}${pendingReview}${requestButton}</div>`;
 }).join("")||"<p>لا توجد نتائج.</p>";
+if(!document.getElementById("studentProfile").classList.contains("hidden"))renderStudentHomeworks("profileHomeworks");
 }
 
 function studentAttemptReviewHtml(attempt){
@@ -547,6 +568,7 @@ let s=data.student;if(!s)return;
 document.getElementById("profileDetails").innerHTML=`<p><b>الاسم:</b> ${esc(s.name)}</p><p><b>رقم ولي الأمر:</b> ${esc(s.phone)}</p><p><b>الصف الدراسي:</b> ${esc(s.grade)}</p><p><b>🔑 كود ولي الأمر:</b> ${esc(s.parentCode||"-")}</p><p><b>تاريخ التسجيل:</b> ${new Date(s.createdAt).toLocaleDateString("ar-EG")}</p><p><b>عدد الامتحانات:</b> ${data.attempts.filter(a=>a.studentId===s.id).length}</p>`;
 let history=data.attempts.filter(a=>a.studentId===s.id);
 document.getElementById("profileHistory").innerHTML=history.length?history.map(a=>`<div class="exam"><h3>${esc(a.title)}</h3><p>الدرجة: ${a.visible?getAttemptScore(a)+"/"+a.total:"قيد المراجعة"}</p><p>تاريخ الامتحان: ${new Date(a.submittedAt).toLocaleString("ar-EG")}</p><span class="tag">تم التسليم</span></div>`).join(""):"<p>لم تؤد أي امتحان حتى الآن.</p>";
+renderStudentHomeworks("profileHomeworks");
 }
 function hideProfile(){
 document.getElementById("studentProfile").classList.add("hidden");
@@ -795,6 +817,7 @@ document.getElementById("messageCount").textContent=data.messages.length;
 document.getElementById("teacherExams").innerHTML=data.exams.map(e=>`<div class="exam"><h3>${esc(e.title)}</h3><p>${esc(e.grade)} • ${e.grade==="الكل"?"مدة مختلفة حسب المرحلة":getDuration(e,e.grade)+" دقيقة"}</p><p>عدد الأسئلة: ${e.questions.length}</p><button class="secondary" onclick="toggleExam('${e.id}')">${e.published?"إيقاف النشر":"إعادة النشر"}</button> <button class="danger" onclick="deleteExam('${e.id}')">حذف</button></div>`).join("")||"لا توجد امتحانات.";
 renderTeacherStudents();
 renderRetakeRequests();
+renderTeacherHomeworks();
 document.getElementById("teacherMessages").innerHTML=data.messages.map(m=>`<div class="exam"><div class="row"><b>${esc(m.name||"طالب")}</b><span class="tag">${new Date(m.createdAt||Date.now()).toLocaleString("ar-EG")}</span></div><h4>${esc(m.subject)}</h4><p>${esc(m.message)}</p><button class="danger" onclick="deleteMessage('${m.id}')">حذف الرسالة</button></div>`).join("")||"لا توجد رسائل أو شكاوى.";
 }
 function renderTeacherStudents(){
@@ -827,7 +850,7 @@ a.finalScore=n;a.score=n;a.reviewed=true;a.visible=true;save();renderTeacher();a
 }
 function viewStudentProfile(id){
 let s=data.students.find(x=>x.id===id);if(!s)return;let attempts=data.attempts.filter(a=>a.studentId===id);
-document.getElementById("reviewContent").innerHTML=`<h2>الملف الشخصي للطالب</h2><div class="exam"><p><b>الاسم:</b> ${esc(s.name)}</p><p><b>رقم ولي الأمر:</b> ${esc(s.phone)}</p><p><b>الصف:</b> ${esc(s.grade)}</p><p><b>كود ولي الأمر:</b> ${esc(s.parentCode||"-")}</p><p><b>تاريخ التسجيل:</b> ${new Date(s.createdAt).toLocaleString("ar-EG")}</p><p><b>عدد المحاولات:</b> ${attempts.length}</p></div><h3>سجل الامتحانات</h3>${attempts.map(a=>`<div class="exam"><b>${esc(a.title)}</b><p>الدرجة: ${getAttemptScore(a)}/${a.total}</p><p>تاريخ التسليم: ${new Date(a.submittedAt).toLocaleString("ar-EG")}</p><button class="secondary" onclick="reviewAttempt('${a.id}')">عرض الإجابات</button> <button class="secondary" onclick="editAttemptScore('${a.id}')">تعديل الدرجة</button></div>`).join("")||"<p>لا توجد امتحانات.</p>"}`;
+document.getElementById("reviewContent").innerHTML=`<h2>الملف الشخصي للطالب</h2><div class="exam"><p><b>الاسم:</b> ${esc(s.name)}</p><p><b>رقم ولي الأمر:</b> ${esc(s.phone)}</p><p><b>الصف:</b> ${esc(s.grade)}</p><p><b>كود ولي الأمر:</b> ${esc(s.parentCode||"-")}</p><p><b>تاريخ التسجيل:</b> ${new Date(s.createdAt).toLocaleString("ar-EG")}</p><p><b>عدد المحاولات:</b> ${attempts.length}</p></div><h3>📚 واجبات الطالب</h3>${homeworksForStudent(id).map(renderHomeworkCard).join("")||"<p>لا توجد واجبات مرسلة.</p>"}<h3>سجل الامتحانات</h3>${attempts.map(a=>`<div class="exam"><b>${esc(a.title)}</b><p>الدرجة: ${getAttemptScore(a)}/${a.total}</p><p>تاريخ التسليم: ${new Date(a.submittedAt).toLocaleString("ar-EG")}</p><button class="secondary" onclick="reviewAttempt('${a.id}')">عرض الإجابات</button> <button class="secondary" onclick="editAttemptScore('${a.id}')">تعديل الدرجة</button></div>`).join("")||"<p>لا توجد امتحانات.</p>"}`;
 show("reviewAttempt");
 }
 function getAnswerForLeaf(a,leaf){
@@ -1013,7 +1036,8 @@ students:data.students||[],
 exams:data.exams||[],
 attempts:data.attempts||[],
 messages:data.messages||[],
-retakeRequests:data.retakeRequests||[]
+retakeRequests:data.retakeRequests||[],
+homeworks:data.homeworks||[]
 };
 }
 
@@ -1075,6 +1099,7 @@ data.exams=Array.isArray(row.data.exams)?row.data.exams:[];
 data.attempts=Array.isArray(row.data.attempts)?row.data.attempts:[];
 data.messages=Array.isArray(row.data.messages)?row.data.messages:[];
 data.retakeRequests=Array.isArray(row.data.retakeRequests)?row.data.retakeRequests:[];
+data.homeworks=Array.isArray(row.data.homeworks)?row.data.homeworks:[];
 localStorage.setItem(KEY,JSON.stringify(data));
 syncApplying=false;
 syncLastUpdated=row.updated_at||null;
@@ -1086,6 +1111,7 @@ const visible=[...document.querySelectorAll("main>section")]
 .find(section=>!section.classList.contains("hidden"));
 if(!visible)return;
 if(visible.id==="student")renderStudent();
+if(visible.id==="homework")renderHomeworkMode();
 if(visible.id==="teacher")renderTeacher();
 if(visible.id==="certificates")renderCertificates();
 if(visible.id==="parent")renderParent();
@@ -1166,6 +1192,84 @@ setSyncStatus("انقطع الاتصال");
 }
 }
 
+
+/* ================= نظام الواجبات ================= */
+let homeworkDraftImages=[],homeworkImagesLoading=0;
+function renderHomeworkMode(){
+ const logged=!!data.student;
+ document.getElementById("homeworkStudentArea").classList.toggle("hidden",!logged);
+ document.getElementById("homeworkLoginNotice").classList.toggle("hidden",logged);
+ if(logged){document.getElementById("homeworkFeedback").textContent="";renderStudentHomeworks("homeworkStudentList");}
+}
+function previewHomeworkImages(){
+ const input=document.getElementById("homeworkImages"), files=[...(input.files||[])];
+ if(files.length>8){alert("يمكنك إرسال 8 صور كحد أقصى في الواجب الواحد.");input.value="";return;}
+ homeworkDraftImages=[];homeworkImagesLoading=files.length;
+ const box=document.getElementById("homeworkPreview");box.innerHTML="";
+ files.forEach((file,index)=>{
+  if(!file.type.startsWith("image/"))return;
+  const reader=new FileReader();
+  reader.onload=()=>{
+   const img=new Image();img.onload=()=>{
+    const scale=Math.min(1,1400/Math.max(img.width,img.height));
+    const canvas=document.createElement("canvas");canvas.width=Math.round(img.width*scale);canvas.height=Math.round(img.height*scale);
+    canvas.getContext("2d").drawImage(img,0,0,canvas.width,canvas.height);
+    const dataUrl=canvas.toDataURL("image/jpeg",0.68);
+    homeworkDraftImages[index]=dataUrl;homeworkImagesLoading=Math.max(0,homeworkImagesLoading-1);
+    const card=document.createElement("div");card.className="card";
+    card.innerHTML=`<img src="${dataUrl}" alt="صورة الواجب ${index+1}" style="width:100%;height:180px;object-fit:contain;border-radius:10px"><p>صفحة ${index+1}</p>`;box.appendChild(card);
+   };img.src=reader.result;
+  };reader.readAsDataURL(file);
+ });
+}
+async function submitHomework(){
+ const s=data.student;if(!s){alert("سجل دخولك كطالب أولاً.");return;}
+ const note=document.getElementById("homeworkNote").value.trim();
+ if(homeworkImagesLoading>0){alert("انتظر حتى يكتمل تجهيز الصور قبل إرسال الواجب.");return;}
+ const images=homeworkDraftImages.filter(Boolean);
+ const totalImageSize=images.reduce((sum,x)=>sum+x.length,0);
+ if(totalImageSize>3500000){alert("حجم الصور بعد ضغطها كبير. قلل عدد الصور أو اختر صوراً أصغر ثم أعد المحاولة.");return;}
+ if(!images.length){alert("اختر صورة واحدة على الأقل للواجب.");return;}
+ const btn=document.querySelector('#homeworkStudentArea button.primary');if(btn)btn.disabled=true;
+ try{
+  const item={id:"hw_"+Date.now()+"_"+Math.random().toString(36).slice(2,7),studentId:s.id,studentName:s.name,grade:s.grade,images,note,status:"pending",createdAt:Date.now(),reviewedAt:null,teacherNote:""};
+  if(!Array.isArray(data.homeworks))data.homeworks=[];
+  data.homeworks.unshift(item);save();
+  document.getElementById("homeworkFeedback").textContent="تم إرسال الواجب للمدرس بنجاح ✓";
+  document.getElementById("homeworkImages").value="";document.getElementById("homeworkNote").value="";document.getElementById("homeworkPreview").innerHTML="";homeworkDraftImages=[];homeworkImagesLoading=0;
+  renderStudentHomeworks("homeworkStudentList");
+ }catch(e){console.error(e);alert("تعذر إرسال الواجب. حاول تقليل عدد الصور أو حجمها.");}
+ finally{if(btn)btn.disabled=false;}
+}
+function homeworksForStudent(studentId){return (data.homeworks||[]).filter(h=>h.studentId===studentId).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));}
+function homeworkStatus(h){return h.status==="correct"?"الواجب صحيح ✓":h.status==="errors"?"الواجب به أخطاء":"في انتظار مراجعة المدرس";}
+function homeworkImagesHtml(h){return (h.images||[]).map((src,i)=>`<a href="${src}" target="_blank" rel="noopener"><img src="${src}" alt="صورة الواجب ${i+1}" style="width:100%;max-height:300px;object-fit:contain;border:1px solid #ddd;border-radius:10px;margin:5px 0"></a>`).join("");}
+function renderHomeworkCard(h){
+ const color=h.status==="correct"?"#16834a":h.status==="errors"?"#d94b63":"#8a6d1d";
+ return `<div class="exam"><div class="row"><b>واجب ${new Date(h.createdAt||Date.now()).toLocaleString("ar-EG")}</b><span class="tag" style="color:${color}">${homeworkStatus(h)}</span></div>${h.studentName?`<p><b>الطالب:</b> ${esc(h.studentName)}</p>`:""}<p><b>الصف:</b> ${esc(h.grade||"")}</p>${h.note?`<p><b>ملاحظة الطالب:</b> ${esc(h.note)}</p>`:""}<div class="grid">${homeworkImagesHtml(h)}</div>${h.status!=="pending"?`<div class="notice"><b>ملاحظات المدرس:</b><p>${esc(h.teacherNote||"لا توجد أخطاء، أحسنت!")}</p><p class="small">تاريخ التصحيح: ${h.reviewedAt?new Date(h.reviewedAt).toLocaleString("ar-EG"):"-"}</p></div>`:""}</div>`;
+}
+function renderStudentHomeworks(targetId){
+ const box=document.getElementById(targetId);if(!box)return;
+ const s=data.student;if(!s){box.innerHTML="";return;}
+ const list=homeworksForStudent(s.id);
+ box.innerHTML=list.map(renderHomeworkCard).join("")||"<p>لم ترسل أي واجب حتى الآن.</p>";
+}
+function renderTeacherHomeworks(){
+ const box=document.getElementById("teacherHomeworks");if(!box)return;
+ const list=(data.homeworks||[]).slice().sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+ box.innerHTML=list.map(h=>`<div class="exam"><div class="row"><h3>${esc(h.studentName||"طالب")}</h3><span class="tag">${esc(h.grade||"")}</span></div><p>تاريخ الإرسال: ${new Date(h.createdAt||Date.now()).toLocaleString("ar-EG")}</p>${h.note?`<p><b>ملاحظة الطالب:</b> ${esc(h.note)}</p>`:""}<div class="grid">${homeworkImagesHtml(h)}</div><p><b>الحالة الحالية:</b> ${homeworkStatus(h)}</p><label>تقييم الواجب</label><select id="hwStatus_${h.id}"><option value="correct" ${h.status==="correct"?"selected":""}>الواجب صحيح</option><option value="errors" ${h.status==="errors"?"selected":""}>الواجب به أخطاء</option></select><label>الأخطاء / ملاحظات المدرس</label><textarea id="hwNote_${h.id}" placeholder="اكتب الأخطاء بالتفصيل حتى تظهر للطالب وولي الأمر...">${esc(h.teacherNote||"")}</textarea><button class="primary" onclick="reviewHomework('${h.id}')">إرسال التصحيح للطالب وولي الأمر</button></div>`).join("")||'<div class="notice">لا توجد واجبات مرسلة حتى الآن.</div>';
+}
+function reviewHomework(id){
+ const h=(data.homeworks||[]).find(x=>x.id===id);if(!h)return;
+ const status=document.getElementById("hwStatus_"+id)?.value;
+ const note=document.getElementById("hwNote_"+id)?.value.trim()||"";
+ if(status==="errors"&&!note){alert("اكتب الأخطاء التي وجدتها في الواجب قبل الإرسال.");return;}
+ h.status=status;h.teacherNote=status==="correct"?(note||"الواجب صحيح، أحسنت!"):note;h.reviewedAt=Date.now();
+ save();renderTeacherHomeworks();alert("تم إرسال تصحيح الواجب بنجاح، وسيظهر للطالب وولي الأمر.");
+}
+/* ================= نهاية نظام الواجبات ================= */
+
+
 /* ===== وضع ولي الأمر ===== */
 function parentLogin(){
 let code=document.getElementById("parentCodeInput").value.trim().toUpperCase();
@@ -1183,7 +1287,7 @@ let v=document.getElementById("parentView");v.classList.toggle("hidden",!s);
 if(!s){if(code)sessionStorage.removeItem("parentCode");return;}
 let at=data.attempts.filter(a=>a.studentId===s.id),shown=at.filter(a=>a.visible);
 let avg=shown.length?Math.round(shown.reduce((t,a)=>t+getAttemptScore(a)/(a.total||1)*100,0)/shown.length):0;
-v.innerHTML=`<div class="row"><h3>${esc(s.name)}</h3><button class="danger" onclick="parentLogout()">خروج</button></div><p class="muted">${esc(s.grade)}${isBanned(s)?" • "+banText(s):""}</p><div class="grid"><div class="card">عدد الامتحانات<div class="stat">${at.length}</div></div><div class="card">متوسط المستوى<div class="stat">${avg}%</div></div></div><h3>سجل الامتحانات</h3>`+(at.map(a=>`<div class="exam"><b>${esc(a.title)}</b><p>${a.visible?"الدرجة: "+getAttemptScore(a)+"/"+a.total:"النتيجة قيد المراجعة"}</p><p class="small">${new Date(a.submittedAt).toLocaleString("ar-EG")}</p></div>`).join("")||"<p>لم يؤد الطالب أي امتحان بعد.</p>");
+v.innerHTML=`<div class="row"><h3>${esc(s.name)}</h3><button class="danger" onclick="parentLogout()">خروج</button></div><p class="muted">${esc(s.grade)}${isBanned(s)?" • "+banText(s):""}</p><div class="grid"><div class="card">عدد الامتحانات<div class="stat">${at.length}</div></div><div class="card">متوسط المستوى<div class="stat">${avg}%</div></div></div><h3>📚 واجبات الطالب</h3>`+(homeworksForStudent(s.id).map(renderHomeworkCard).join("")||"<p>لا توجد واجبات مرسلة حتى الآن.</p>")+`<h3>سجل الامتحانات</h3>`+(at.map(a=>`<div class="exam"><b>${esc(a.title)}</b><p>${a.visible?"الدرجة: "+getAttemptScore(a)+"/"+a.total:"النتيجة قيد المراجعة"}</p><p class="small">${new Date(a.submittedAt).toLocaleString("ar-EG")}</p></div>`).join("")||"<p>لم يؤد الطالب أي امتحان بعد.</p>");
 }
 
 /* ===== طرد تلقائي عند الحذف أو الحظر ===== */
