@@ -470,8 +470,60 @@ let req=data.retakeRequests.find(r=>r.originalAttemptId===a.id);
 let isLatest=latestByExam[a.examId]?.id===a.id;
 let requestButton=isLatest&&!req?`<button class="secondary" onclick="requestRetake('${a.id}')">طلب إعادة الامتحان</button>`:"";
 let status=req?`<p class="notice">حالة طلب الإعادة: <b>${retakeStatusText(req.status)}</b>${req.teacherNote?'<br>رد المدرس: '+esc(req.teacherNote):''}</p>`:"";
-return `<div class="exam"><b>${esc(a.title)}</b><p>${a.visible?"الدرجة: "+getAttemptScore(a)+"/"+a.total:"النتيجة قيد المراجعة"}</p>${status}${requestButton}</div>`;
+let canReview=!!(a.visible&&a.reviewed&&data.exams.some(e=>e.id===a.examId));
+let reviewBlock=canReview?`<button class="secondary" onclick="toggleStudentReview('${a.id}')">📝 مراجعة إجاباتي وأخطائي</button><div id="studentReview_${a.id}" class="hidden">${studentAttemptReviewHtml(a)}</div>`:"";
+let pendingReview=!a.reviewed?'<p class="small">ستظهر مراجعة الإجابات بعد انتهاء تصحيح جميع الأسئلة.</p>':"";
+return `<div class="exam"><b>${esc(a.title)}</b><p>${a.visible?"الدرجة: "+getAttemptScore(a)+"/"+a.total:"النتيجة قيد المراجعة"}</p>${status}${reviewBlock}${pendingReview}${requestButton}</div>`;
 }).join("")||"<p>لا توجد نتائج.</p>";
+}
+
+function studentAttemptReviewHtml(attempt){
+let exam=data.exams.find(e=>e.id===attempt.examId);
+if(!exam||!attempt.visible||!attempt.reviewed)return '<div class="notice">المراجعة غير متاحة حالياً.</div>';
+let leaves=getLeaves(exam);
+let html='<div class="notice"><b>مراجعة الامتحان:</b> ستجد إجابتك والإجابة النموذجية وحالة كل سؤال.</div>';
+leaves.forEach((leaf,index)=>{
+let answer=getAnswerForLeaf(attempt,leaf);
+let earned=Array.isArray(attempt.manualScores)?attempt.manualScores[index]:null;
+let model="";
+let promptText=leaf.text||"";
+if(leaf.kind==="dialog"){
+let line=exam.questions[leaf.parent].lines[leaf.index];
+model=line.options?.[Number(line.correct)-1]||"";
+promptText="سؤال في الحوار";
+}else if(leaf.kind==="passage"){
+let sub=exam.questions[leaf.parent].subquestions[leaf.index];
+model=sub.expected||sub.options?.[Number(sub.correct)-1]||"";
+}else if(leaf.kind==="correct"){
+let q=exam.questions[leaf.parent];
+model=q.correctWord||"";
+promptText=q.sentence||promptText;
+}else if(leaf.kind==="rewrite"){
+let q=exam.questions[leaf.parent];
+model=q.expected||"";
+promptText="أعد كتابة الجملة باستخدام الكلمة: "+(q.replacementWord||"");
+}else if(leaf.type==="mcq"){
+model=leaf.options?.[Number(leaf.correct)-1]||"";
+}
+let shownAnswer=(leaf.type==="mcq"&&answer!=="")?(leaf.options?.[Number(answer)-1]||answer):(answer||"لم تتم الإجابة");
+let isCorrect=Number(earned)>=Number(leaf.points);
+let statusText=isCorrect?"إجابة صحيحة ✓":(Number(earned)>0?"حصلت على درجة جزئية":"إجابة غير صحيحة ✗");
+let statusClass=isCorrect?"success":"danger";
+html+=`<div class="answer-review">
+<h4>السؤال ${index+1}</h4>
+${promptText?`<p>${esc(promptText)}</p>`:""}
+<p><b>إجابتك:</b></p><div class="notice">${esc(shownAnswer)}</div>
+${model?`<p><b>الإجابة الصحيحة / النموذجية:</b> ${esc(model)}</p>`:""}
+<p><span class="tag">${statusText}</span></p>
+<p class="small">درجتك: ${Number(earned)||0} من ${Number(leaf.points)||0}</p>
+</div>`;
+});
+return html;
+}
+
+function toggleStudentReview(attemptId){
+let box=document.getElementById("studentReview_"+attemptId);
+if(box)box.classList.toggle("hidden");
 }
 function showProfile(){
 document.getElementById("studentProfile").classList.remove("hidden");
