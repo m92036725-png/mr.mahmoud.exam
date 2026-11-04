@@ -281,7 +281,7 @@ body.dark .teacher-nav-badge{border-color:#1f2937}
 <button class="secondary" onclick="teacherNavigate('teacherCreateExamSection')">📝 إنشاء امتحان</button>
 <button class="secondary" onclick="teacherNavigate('teacherExamsSection')"><span class="teacher-nav-badge hidden" id="badgeTeacherExams"></span>📋 الامتحانات</button>
 <button class="secondary" onclick="teacherNavigate('teacherHomeworkSection')"><span class="teacher-nav-badge hidden" id="badgeTeacherHomeworks"></span>📚 واجبات الطلاب</button>
-<button class="secondary" onclick="teacherNavigate('teacherStudentsSection')">👨‍🎓 بيانات الطلاب كاملة</button>
+<button class="secondary" onclick="teacherNavigate('teacherStudentsSection')"><span class="teacher-nav-badge hidden" id="badgeTeacherAttempts"></span>👨‍🎓 بيانات الطلاب كاملة</button>
 <button class="secondary" onclick="teacherNavigate('teacherRetakesSection')"><span class="teacher-nav-badge hidden" id="badgeTeacherRetakes"></span>🔁 طلبات الإعادة</button>
 <button class="secondary" onclick="teacherNavigate('teacherMessagesSection')"><span class="teacher-nav-badge hidden" id="badgeTeacherMessages"></span>✉️ رسائل الدعم</button>
 </div></div>
@@ -416,6 +416,9 @@ const GRADES=["الرابع الابتدائي","الخامس الابتدائي
 let data=loadData(),questionNumber=0,activeExam=null,timerInterval=null,endTime=null,submitting=false,activeRetakeRequest=null;
 if(!Array.isArray(data.retakeRequests))data.retakeRequests=[];
 if(!Array.isArray(data.homeworks))data.homeworks=[];
+// ترحيل المحاولات السابقة حتى لا تظهر إشعارات قديمة بأثر رجعي.
+if(!Array.isArray(data.attempts))data.attempts=[];
+data.attempts.forEach(a=>{if(typeof a.teacherSeen==="undefined")a.teacherSeen=true;});
 
 function loadData(){
 try{
@@ -820,7 +823,8 @@ score,total,answers,manualScores,
 visible:exam.visible,
 submittedAt,
 automatic:!!auto,
-reviewed:manualScores.every(x=>x!==null)
+reviewed:manualScores.every(x=>x!==null),
+teacherSeen:false
 };
 
 if(activeRetakeRequest){
@@ -926,6 +930,8 @@ function setTeacherNavBadge(id,count){
  badge.setAttribute("aria-label",String(n));
 }
 function updateTeacherNavBadges(){
+ // إشعارات محاولات الامتحان الجديدة التي لم يطّلع عليها المدرس بعد.
+ setTeacherNavBadge("badgeTeacherAttempts",(data.attempts||[]).filter(a=>a.teacherSeen!==true).length);
  setTeacherNavBadge("badgeTeacherExams",(data.exams||[]).length);
  // العناصر التي ما زالت تنتظر إجراء المدرس فقط.
  setTeacherNavBadge("badgeTeacherHomeworks",(data.homeworks||[]).filter(h=>h.status==="pending"&&!h.teacherArchived).length);
@@ -935,6 +941,15 @@ function updateTeacherNavBadges(){
 
 function teacherNavigate(sectionId){
  const target=document.getElementById(sectionId);if(!target)return;
+ // عند فتح بيانات الطلاب والنتائج تُعلَّم كل المحاولات الجديدة كمقروءة.
+ if(sectionId==="teacherStudentsSection"){
+  let changed=false;
+  (data.attempts||[]).forEach(a=>{
+   if(a.teacherSeen!==true){a.teacherSeen=true;changed=true;}
+  });
+  if(changed)save();
+  updateTeacherNavBadges();
+ }
  target.scrollIntoView({behavior:"smooth",block:"start"});
  target.classList.add("teacher-section-focus");
  setTimeout(()=>target.classList.remove("teacher-section-focus"),1100);
@@ -1245,6 +1260,8 @@ syncApplying=true;
 data.students=Array.isArray(row.data.students)?row.data.students:[];
 data.exams=Array.isArray(row.data.exams)?row.data.exams:[];
 data.attempts=Array.isArray(row.data.attempts)?row.data.attempts:[];
+// المحاولات القديمة قبل إضافة الإشعارات تُعد مقروءة، والجديدة فقط تظهر كتنبيه.
+data.attempts.forEach(a=>{if(typeof a.teacherSeen==="undefined")a.teacherSeen=true;});
 data.messages=Array.isArray(row.data.messages)?row.data.messages:[];
 data.retakeRequests=Array.isArray(row.data.retakeRequests)?row.data.retakeRequests:[];
 data.homeworks=Array.isArray(row.data.homeworks)?row.data.homeworks:[];
