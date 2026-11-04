@@ -754,31 +754,105 @@ if(seconds===0)submitExam(true);
 }
 function normalizeAnswer(v){return String(v||"").trim().toLowerCase().replace(/\s+/g," ");}
 function submitExam(auto=false){
-if(!activeExam||submitting)return;submitting=true;clearInterval(timerInterval);
-let exam=activeExam,s=data.student;if(!s){submitting=false;return;}
-let answers=getStudentAnswers(),leaves=getLeaves(exam),score=0,total=0,manualScores=[];
+if(!activeExam || submitting) return;
+
+submitting=true;
+clearInterval(timerInterval);
+
+const exam=activeExam;
+const student=data.student;
+
+if(!student){
+submitting=false;
+alert("انتهت جلسة الطالب. سجل الدخول مرة أخرى.");
+return;
+}
+
+try{
+const answers=getStudentAnswers();
+const leaves=getLeaves(exam);
+let score=0,total=0;
+const manualScores=[];
+
 leaves.forEach(leaf=>{
-total+=Number(leaf.points)||0;let answer="";
-if(leaf.kind==="dialog")answer=answers[leaf.parent][leaf.index];
-else if(leaf.kind==="passage")answer=answers[leaf.parent][leaf.index];
-else answer=answers[leaf.parent];
+total+=Number(leaf.points)||0;
+let answer="";
+
+if(leaf.kind==="dialog") answer=answers[leaf.parent]?.[leaf.index]||"";
+else if(leaf.kind==="passage") answer=answers[leaf.parent]?.[leaf.index]||"";
+else answer=answers[leaf.parent]||"";
+
 let earned=null;
-if(leaf.type==="mcq")earned=Number(answer)===Number(leaf.correct)?leaf.points:0;
-else if(leaf.kind==="correct"){let q=exam.questions[leaf.parent];earned=normalizeAnswer(answer)===normalizeAnswer(q.correctWord)?leaf.points:0;}
-else if(leaf.kind==="rewrite"){let q=exam.questions[leaf.parent];earned=normalizeAnswer(answer)===normalizeAnswer(q.expected)?leaf.points:0;}
-manualScores.push(earned);if(earned!==null)score+=earned;
+if(leaf.type==="mcq"){
+earned=Number(answer)===Number(leaf.correct)?Number(leaf.points)||0:0;
+}else if(leaf.kind==="correct"){
+const q=exam.questions[leaf.parent];
+earned=normalizeAnswer(answer)===normalizeAnswer(q.correctWord)?Number(leaf.points)||0:0;
+}else if(leaf.kind==="rewrite"){
+const q=exam.questions[leaf.parent];
+earned=normalizeAnswer(answer)===normalizeAnswer(q.expected)?Number(leaf.points)||0:0;
+}
+
+manualScores.push(earned);
+if(earned!==null) score+=earned;
 });
-let newAttempt={id:"attempt_"+Date.now(),examId:exam.id,studentId:s.id,studentName:s.name,studentGrade:s.grade,title:exam.title,score,total,answers,manualScores,visible:exam.visible,submittedAt:Date.now(),automatic:auto,reviewed:manualScores.every(x=>x!==null)};
+
+const submittedAt=Date.now();
+const requestId=activeRetakeRequest?.id||null;
+const newAttempt={
+id:"attempt_"+submittedAt+"_"+Math.random().toString(36).slice(2,7),
+examId:exam.id,
+studentId:student.id,
+studentName:student.name,
+studentGrade:student.grade,
+title:exam.title,
+score,total,answers,manualScores,
+visible:exam.visible,
+submittedAt,
+automatic:!!auto,
+reviewed:manualScores.every(x=>x!==null)
+};
+
 if(activeRetakeRequest){
 newAttempt.retakeOf=activeRetakeRequest.originalAttemptId;
-newAttempt.retakeRequestId=activeRetakeRequest.id;
-activeRetakeRequest.usedAt=Date.now();
-activeRetakeRequest.status="used";
+newAttempt.retakeRequestId=requestId;
 }
+
+/* تسجيل المحاولة الجديدة وتحديث طلب الإعادة الموجود في أحدث نسخة من البيانات */
+if(!Array.isArray(data.attempts)) data.attempts=[];
 data.attempts.push(newAttempt);
-save();try{localStorage.removeItem("exam_progress")}catch(e){}
-activeExam=null;activeRetakeRequest=null;submitting=false;
-if(!auto){show("student");alert("تم تسليم الامتحان وحفظ إجاباتك. الأسئلة المقالية تنتظر تصحيح المدرس.");}
+
+if(requestId){
+const currentRequest=(data.retakeRequests||[]).find(r=>r.id===requestId);
+if(currentRequest){
+currentRequest.usedAt=submittedAt;
+currentRequest.status="used";
+}
+}
+
+/* حفظ البيانات قبل إنهاء شاشة الامتحان */
+save();
+try{localStorage.removeItem("exam_progress");}catch(e){}
+
+/* إنهاء حالة الامتحان دائماً بعد نجاح الحفظ */
+activeExam=null;
+activeRetakeRequest=null;
+submitting=false;
+clearInterval(timerInterval);
+
+/* العودة إلى صفحة الطالب سواء تم التسليم يدوياً أو بانتهاء الوقت */
+show("student");
+renderStudent();
+alert(auto
+?"انتهى وقت الامتحان وتم تسليم إجاباتك وحفظها."
+:"تم تسليم الامتحان وحفظ إجاباتك بنجاح. الأسئلة المقالية تنتظر تصحيح المدرس.");
+
+}catch(error){
+console.error("Exam submission error:",error);
+submitting=false;
+clearInterval(timerInterval);
+alert("حدث خطأ أثناء تسليم الامتحان. لم يتم إنهاء المحاولة؛ حاول الضغط على زر التسليم مرة أخرى. إذا تكرر الخطأ، أرسل للمدرس صورة من رسالة الخطأ في وحدة تحكم المتصفح.");
+}
 }
 function getAttemptScore(a){
 if(Number.isFinite(Number(a.finalScore)))return Number(a.finalScore);
