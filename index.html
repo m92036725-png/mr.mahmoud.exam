@@ -158,7 +158,7 @@ body{background:radial-gradient(ellipse at 50% 0%,#e5efff 0,#f7f8ff 52%,#eef2ff 
 .theme-switch span{margin-left:7px}
 .bell-button{background:transparent;font-size:30px!important;position:relative}
 .bell-button i{position:absolute;top:-3px;right:3px;background:#ec263a;border:2px solid #fff;border-radius:50%;font-size:12px;font-style:normal;width:23px;height:23px;display:grid;place-items:center}
-.header-exit{background:linear-gradient(#3188ff,#0751ca);box-shadow:0 4px 12px #001b5480}
+.header-home,.header-support{background:linear-gradient(#3188ff,#0751ca);box-shadow:0 4px 12px #001b5480;white-space:nowrap}.header-support{background:linear-gradient(#18a7a0,#087d85)}
 .mobile-menu{display:none}
 main{max-width:none;width:auto;margin:28px 0 40px;padding:0 28px 0 28px;margin-right:248px;min-height:calc(100vh - 205px)}
 #home{max-width:1500px;margin:auto}
@@ -261,7 +261,8 @@ body.dark .card,body.dark .panel,body.dark .exam{background:#1b2942;color:#e7eff
   <div class="header-tools">
     <button class="theme-switch" onclick="toggleDarkMode()" aria-label="تغيير الوضع">☀️ <span>☾</span></button>
     <button class="bell-button" onclick="show('teacherLogin')" aria-label="الإشعارات">♧<i id="headerNotificationCount">0</i></button>
-    <button class="header-exit" onclick="headerExit()">خروج ↪</button>
+    <button class="header-home" onclick="show('home')">🏠 القائمة الرئيسية</button>
+    <button class="header-support" onclick="show('support')">🎧 الدعم الفني</button>
   </div>
   <div class="header-motto">معًا نحو التميز في تعلم اللغة الإنجليزية<span></span></div>
   <div class="brand-block">
@@ -293,9 +294,9 @@ body.dark .card,body.dark .panel,body.dark .exam{background:#1b2942;color:#e7eff
 <section id="home">
   <div class="home-banner">
     <div class="banner-copy">
-      <div class="banner-kicker">مرحباً بك في منصة</div>
-      <h1>مستر محمود خاطر</h1>
-      <p>تعلم .. تدرب .. حقق حلمك</p>
+      <div class="banner-kicker">WELCOME TO</div>
+      <h1>MR. MAHMOUD KHATER</h1>
+      <p>LEARN&nbsp; • &nbsp;PRACTICE&nbsp; • &nbsp;ACHIEVE YOUR DREAMS</p>
       <span class="banner-underline"></span>
     </div>
     <div class="banner-slogan">You can<br>do it!</div>
@@ -569,10 +570,6 @@ if(id==="support")renderSupportReplies();
 closeSideMenu();
 }
 
-function headerExit(){
- if(data.student){logout();return;}
- show("student");
-}
 function toggleSideMenu(){
 document.getElementById("sideMenu").classList.toggle("hidden");
 document.getElementById("menuOverlay").classList.toggle("hidden");
@@ -1113,12 +1110,23 @@ let filtered=data.students.filter(s=>
 );
 let grades=selectedGrade?[selectedGrade]:GRADES;
 box.innerHTML=grades.map(grade=>{
-let students=filtered.filter(s=>s.grade===grade);
+let students=filtered.filter(s=>s.grade===grade).map(s=>{
+const attempts=data.attempts.filter(a=>a.studentId===s.id);
+const validAttempts=attempts.filter(a=>Number(a.total)>0);
+const average=validAttempts.length?validAttempts.reduce((sum,a)=>sum+(Number(getAttemptScore(a))/Number(a.total))*100,0)/validAttempts.length:-1;
+return {...s,_attempts:attempts,_average:average};
+}).sort((a,b)=>{
+if(a._average<0&&b._average>=0)return 1;
+if(b._average<0&&a._average>=0)return -1;
+if(a._average!==b._average)return b._average-a._average;
+return String(a.name||"").localeCompare(String(b.name||""),"ar");
+});
 if(!students.length)return "";
-return `<section class="panel"><div class="row"><h3>📚 ${esc(grade)}</h3><span class="tag">${students.length} طالب</span></div>`+
+return `<section class="panel"><div class="row"><h3>📚 ${esc(grade)}</h3><span class="tag">${students.length} طالب • الترتيب حسب متوسط الدرجات</span></div>`+
 students.map(s=>{
-let attempts=data.attempts.filter(a=>a.studentId===s.id);
-return `<div class="exam"><div class="row"><h3>${esc(s.name)}</h3><span class="tag">${esc(s.grade)}</span></div><p>رقم ولي الأمر: ${esc(s.phone)}</p><p>تاريخ التسجيل: ${new Date(s.createdAt).toLocaleDateString("ar-EG")}</p><p>عدد الامتحانات: ${attempts.length}</p><p>كود ولي الأمر: <b>${esc(s.parentCode||"-")}</b></p>${isBanned(s)?`<p style="color:#d94b63"><b>${banText(s)}</b></p>`:""}<div class="actions"><button class="secondary" onclick="viewStudentProfile('${s.id}')">فتح الملف الشخصي الكامل</button>${isBanned(s)?`<button class="success" onclick="unbanStudent('${s.id}')">فك الحظر</button>`:`<button class="danger" onclick="banStudent('${s.id}')">حظر</button>`}<button class="secondary" onclick="resetPass('${s.id}')">إعادة تعيين الباسورد</button><button class="danger" onclick="deleteStudent('${s.id}')">حذف الطالب</button></div>${attempts.map(a=>`<div class="notice"><b>${esc(a.title)}</b><br>الدرجة الحالية: ${getAttemptScore(a)}/${a.total}<br>${a.reviewed?"تم التصحيح":"توجد إجابات تحتاج إلى مراجعة"}<br>${new Date(a.submittedAt).toLocaleString("ar-EG")}<div class="actions"><button class="secondary" onclick="reviewAttempt('${a.id}')">عرض الإجابات وتصحيحها</button><button class="secondary" onclick="editAttemptScore('${a.id}')">تعديل الدرجة النهائية</button><button class="secondary" onclick="toggleResult('${a.id}')">${a.visible?"إخفاء النتيجة":"إظهار النتيجة"}</button></div></div>`).join("")}</div>`;
+let attempts=s._attempts;
+let averageLabel=s._average<0?"لم يؤدِّ أي امتحان":`متوسط الدرجات: ${s._average.toFixed(1)}%`;
+return `<div class="exam"><div class="row"><h3>${esc(s.name)}</h3><span class="tag">${esc(s.grade)}</span></div><p><b>${averageLabel}</b></p><p>رقم ولي الأمر: ${esc(s.phone)}</p><p>تاريخ التسجيل: ${new Date(s.createdAt).toLocaleDateString("ar-EG")}</p><p>عدد الامتحانات: ${attempts.length}</p><p>كود ولي الأمر: <b>${esc(s.parentCode||"-")}</b></p>${isBanned(s)?`<p style="color:#d94b63"><b>${banText(s)}</b></p>`:""}<div class="actions"><button class="secondary" onclick="viewStudentProfile('${s.id}')">فتح الملف الشخصي الكامل</button>${isBanned(s)?`<button class="success" onclick="unbanStudent('${s.id}')">فك الحظر</button>`:`<button class="danger" onclick="banStudent('${s.id}')">حظر</button>`}<button class="secondary" onclick="resetPass('${s.id}')">إعادة تعيين الباسورد</button><button class="danger" onclick="deleteStudent('${s.id}')">حذف الطالب</button></div>${attempts.map(a=>`<div class="notice"><b>${esc(a.title)}</b><br>الدرجة الحالية: ${getAttemptScore(a)}/${a.total}<br>${a.reviewed?"تم التصحيح":"توجد إجابات تحتاج إلى مراجعة"}<br>${new Date(a.submittedAt).toLocaleString("ar-EG")}<div class="actions"><button class="secondary" onclick="reviewAttempt('${a.id}')">عرض الإجابات وتصحيحها</button><button class="secondary" onclick="editAttemptScore('${a.id}')">تعديل الدرجة النهائية</button><button class="secondary" onclick="toggleResult('${a.id}')">${a.visible?"إخفاء النتيجة":"إظهار النتيجة"}</button></div></div>`).join("")}</div>`;
 }).join("")+`</section>`;
 }).join("");
 if(!filtered.length)box.innerHTML='<div class="notice">لا يوجد طلاب مطابقون للبحث أو المرحلة المحددة.</div>';
