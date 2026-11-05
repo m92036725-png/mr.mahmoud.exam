@@ -252,6 +252,64 @@ body.dark .card,body.dark .panel,body.dark .exam{background:#1b2942;color:#e7eff
  .teacher-nav .actions button{flex:1 1 100%}
 }
 
+
+/* ===== تحسين توزيع الواجهة على الكمبيوتر والشاشات المتوسطة ===== */
+.site-header{height:auto;min-height:112px;padding:16px 22px;gap:16px;flex-wrap:wrap}
+.brand-block{min-width:250px;gap:12px}
+.brand-block h2{font-size:clamp(20px,2vw,28px);white-space:normal}
+.brand-block b{font-size:clamp(14px,1.4vw,18px)}
+.brand-seal{width:78px;height:78px}
+.brand-seal strong{font-size:30px}
+.header-motto{font-size:clamp(15px,1.5vw,20px);min-width:180px}
+.header-tools{gap:8px;flex-wrap:wrap;justify-content:flex-start}
+.header-tools button{font-size:15px;padding:10px 13px}
+main{width:auto;max-width:1600px;margin:24px auto 40px;padding:0 26px;min-height:calc(100vh - 210px)}
+#home{width:100%;max-width:1500px;margin:0 auto}
+.home-banner{min-height:220px;height:clamp(220px,22vw,280px)}
+.home-shortcuts{grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}
+.shortcut{min-width:0;height:90px;padding:10px}
+.shortcut b{font-size:clamp(14px,1.25vw,18px);white-space:normal}
+.shortcut-icon{font-size:clamp(25px,2.4vw,36px)}
+.home-panels{grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr);gap:16px}
+.home-panel{min-width:0}
+.promo-content{gap:12px}
+.teacher-nav{position:static;margin-bottom:20px}
+.teacher-nav .actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
+.teacher-nav .actions button{min-width:0;white-space:normal}
+#teacherStudentsSection .panel{min-width:0}
+.group-manager{border:1px solid #dce6ff;background:#fbfcff}
+.group-create-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:end}
+.groups-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px;margin-top:14px}
+.group-chip{display:flex;justify-content:space-between;align-items:center;gap:10px;background:#eef3ff;border:1px solid #dce6ff;padding:12px;border-radius:12px;min-width:0}
+.group-chip small{display:block;color:#71809b;margin-top:4px}
+.group-chip button{flex:none}
+body.dark .group-manager{background:#1f2937;border-color:#374151}
+body.dark .group-chip{background:#273449;border-color:#3d4b60;color:#e5e7eb}
+@media(min-width:1500px){
+ main{padding-left:38px;padding-right:38px}
+ .home-shortcuts{gap:18px}
+ .shortcut{height:100px}
+}
+@media(max-width:1050px){
+ .site-header{justify-content:center}
+ .header-motto{order:3;flex-basis:100%;padding:5px}
+ .brand-block{min-width:0}
+ main{padding:0 18px}
+ .home-shortcuts{grid-template-columns:repeat(3,minmax(0,1fr))}
+ .home-panels{grid-template-columns:1fr}
+}
+@media(max-width:700px){
+ .site-header{padding:12px;justify-content:space-between}
+ .brand-block{order:2}
+ .header-tools{order:3;width:100%;justify-content:center}
+ .header-motto{display:none}
+ main{margin:18px auto 30px;padding:0 12px}
+ .home-shortcuts{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+ .home-panels{grid-template-columns:1fr}
+ .teacher-nav .actions{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .group-create-row{grid-template-columns:1fr}
+ .group-chip{flex-wrap:wrap}
+}
 </style>
 </head>
 <body>
@@ -343,6 +401,8 @@ body.dark .card,body.dark .panel,body.dark .exam{background:#1b2942;color:#e7eff
 <option>الأول الإعدادي</option><option>الثاني الإعدادي</option><option>الثالث الإعدادي</option>
 <option>الأول الثانوي</option><option>الثاني الثانوي</option>
 </select>
+<label>المجموعة / السنتر (اختياري)</label>
+<select id="studentGroup"><option value="">بدون مجموعة</option></select>
 <label>كلمة المرور</label>
 <input id="studentPass" type="password" placeholder="كلمة مرور حسابك">
 <button class="primary" onclick="register()">تسجيل الدخول</button>
@@ -432,7 +492,14 @@ body.dark .card,body.dark .panel,body.dark .exam{background:#1b2942;color:#e7eff
 <button class="primary" onclick="publishExam()">نشر الامتحان</button><p id="examError"></p>
 </div>
 <div id="teacherExamsSection"><h2>إدارة الامتحانات</h2><div id="teacherExams"></div></div>
-<div id="teacherStudentsSection"><h2>ملفات الطلاب الشخصية والنتائج</h2>
+<div id="teacherStudentsSection">
+<h2>👥 إدارة مجموعات الطلاب</h2>
+<div class="panel group-manager">
+<div class="row"><div><h3>إنشاء مجموعات جديدة</h3><p class="muted">مثل: سنتر مدينة نصر، مجموعة السبت، مجموعة أونلاين.</p></div></div>
+<div class="group-create-row"><input id="newGroupName" type="text" maxlength="60" placeholder="اكتب اسم المجموعة الجديدة"><button class="primary" onclick="createStudentGroup()">＋ إنشاء المجموعة</button></div>
+<div id="teacherGroupsList" class="groups-list"></div>
+</div>
+<h2>ملفات الطلاب الشخصية والنتائج</h2>
 <div class="panel">
 <label for="teacherStudentSearch">🔎 البحث باسم الطالب</label>
 <input id="teacherStudentSearch" type="search" placeholder="اكتب اسم الطالب للبحث..." oninput="renderTeacherStudents()">
@@ -548,9 +615,9 @@ data.attempts.forEach(a=>{if(typeof a.teacherSeen==="undefined")a.teacherSeen=tr
 function loadData(){
 try{
 let d=JSON.parse(localStorage.getItem(KEY));
-return d||{students:[],student:null,exams:[],attempts:[],messages:[]};
+return d||{students:[],student:null,exams:[],attempts:[],messages:[],groups:[]};
 }catch(e){
-return {students:[],student:null,exams:[],attempts:[],messages:[]};
+return {students:[],student:null,exams:[],attempts:[],messages:[],groups:[]};
 }
 }
 function show(id){
@@ -605,10 +672,44 @@ function banText(s){
 if(!isBanned(s))return"";
 return s.ban.permanent?"محظور بشكل دائم":"محظور حتى "+new Date(s.ban.until).toLocaleString("ar-EG");
 }
+function groupName(groupId){
+const group=(data.groups||[]).find(g=>g.id===groupId);
+return group?group.name:"بدون مجموعة";
+}
+function renderStudentGroupOptions(selectedId=""){
+const select=document.getElementById("studentGroup");
+if(!select)return;
+select.innerHTML='<option value="">بدون مجموعة</option>'+(data.groups||[]).map(g=>`<option value="${esc(g.id)}">${esc(g.name)}</option>`).join("");
+select.value=selectedId||"";
+}
+function createStudentGroup(){
+const input=document.getElementById("newGroupName");
+const name=(input?.value||"").trim();
+if(!name){alert("اكتب اسم المجموعة أولاً.");return;}
+if((data.groups||[]).some(g=>g.name.trim().toLocaleLowerCase("ar")===name.toLocaleLowerCase("ar"))){alert("هذه المجموعة موجودة بالفعل.");return;}
+data.groups.push({id:"group_"+Date.now()+"_"+Math.random().toString(36).slice(2,7),name,createdAt:Date.now()});
+if(input)input.value="";
+save();renderTeacher();alert("تم إنشاء المجموعة بنجاح.");
+}
+function deleteStudentGroup(id){
+const group=(data.groups||[]).find(g=>g.id===id);if(!group)return;
+if(!confirm("حذف مجموعة «"+group.name+"»؟ سيتم نقل الطلاب فيها إلى (بدون مجموعة)."))return;
+data.students.forEach(s=>{if(s.groupId===id)s.groupId="";});
+data.groups=data.groups.filter(g=>g.id!==id);
+save();renderTeacher();
+}
+function updateStudentGroup(groupId){
+if(!data.student)return;
+data.student.groupId=groupId||"";
+const student=data.students.find(s=>s.id===data.student.id);
+if(student)student.groupId=groupId||"";
+save();renderStudent();showProfile();
+}
 async function register(){
 let name=document.getElementById("studentName").value.trim();
 let phone=document.getElementById("parentPhone").value.trim();
 let grade=document.getElementById("grade").value;
+let selectedGroup=document.getElementById("studentGroup")?.value||"";
 let pass=document.getElementById("studentPass").value;
 let err=document.getElementById("regError");
 if(name.split(/\s+/).length<3||!phone||!grade||pass.length<4){
@@ -621,9 +722,10 @@ if(isBanned(existing)){err.textContent=banText(existing);return;}
 if(existing.passHash&&existing.passHash!==h){err.textContent="كلمة المرور غير صحيحة.";return;}
 if(!existing.passHash)existing.passHash=h;
 if(!existing.parentCode)existing.parentCode=genParentCode();
-existing.grade=grade;data.student=existing;
+existing.grade=grade;if(selectedGroup)existing.groupId=selectedGroup;else if(!existing.groupId)existing.groupId="";
+data.student=existing;
 }else{
-data.student={id:"student_"+Date.now(),name,phone,grade,passHash:h,parentCode:genParentCode(),createdAt:Date.now()};
+data.student={id:"student_"+Date.now(),name,phone,grade,groupId:selectedGroup,passHash:h,parentCode:genParentCode(),createdAt:Date.now()};
 data.students.push(data.student);
 }
 err.textContent="";document.getElementById("studentPass").value="";
@@ -635,6 +737,7 @@ data.student=null;save();renderStudent();
 }
 function renderStudent(){
 let s=data.student;
+renderStudentGroupOptions(s?.groupId||"");
 document.getElementById("register").classList.toggle("hidden",!!s);
 document.getElementById("studentDashboard").classList.toggle("hidden",!s);
 if(!s)return;
@@ -724,7 +827,7 @@ function showProfile(){
 document.getElementById("studentProfile").classList.remove("hidden");
 document.getElementById("studentExamArea").classList.add("hidden");
 let s=data.student;if(!s)return;
-document.getElementById("profileDetails").innerHTML=`<p><b>الاسم:</b> ${esc(s.name)}</p><p><b>رقم ولي الأمر:</b> ${esc(s.phone)}</p><p><b>الصف الدراسي:</b> ${esc(s.grade)}</p><p><b>🔑 كود ولي الأمر:</b> ${esc(s.parentCode||"-")}</p><p><b>تاريخ التسجيل:</b> ${new Date(s.createdAt).toLocaleDateString("ar-EG")}</p><p><b>عدد الامتحانات:</b> ${data.attempts.filter(a=>a.studentId===s.id).length}</p>`;
+document.getElementById("profileDetails").innerHTML=`<p><b>الاسم:</b> ${esc(s.name)}</p><p><b>رقم ولي الأمر:</b> ${esc(s.phone)}</p><p><b>الصف الدراسي:</b> ${esc(s.grade)}</p><p><b>المجموعة:</b> ${esc(groupName(s.groupId))}</p><label for="profileGroupSelect">اختيار / تغيير المجموعة</label><select id="profileGroupSelect">${'<option value="">بدون مجموعة</option>'+(data.groups||[]).map(g=>`<option value="${esc(g.id)}" ${s.groupId===g.id?"selected":""}>${esc(g.name)}</option>`).join("")}</select><button class="secondary" onclick="updateStudentGroup(document.getElementById('profileGroupSelect').value)">حفظ المجموعة</button><p><b>🔑 كود ولي الأمر:</b> ${esc(s.parentCode||"-")}</p><p><b>تاريخ التسجيل:</b> ${new Date(s.createdAt).toLocaleDateString("ar-EG")}</p><p><b>عدد الامتحانات:</b> ${data.attempts.filter(a=>a.studentId===s.id).length}</p>`;
 let history=data.attempts.filter(a=>a.studentId===s.id);
 document.getElementById("profileHistory").innerHTML=history.length?history.map(a=>`<div class="exam"><h3>${esc(a.title)}</h3><p>الدرجة: ${a.visible?getAttemptScore(a)+"/"+a.total:"قيد المراجعة"}</p><p>تاريخ الامتحان: ${new Date(a.submittedAt).toLocaleString("ar-EG")}</p><span class="tag">تم التسليم</span></div>`).join(""):"<p>لم تؤد أي امتحان حتى الآن.</p>";
 renderStudentHomeworks("profileHomeworks");
@@ -1094,10 +1197,19 @@ document.getElementById("attemptCount").textContent=data.attempts.length;
 document.getElementById("messageCount").textContent=(data.messages||[]).filter(m=>!m.teacherReply&&!m.teacherArchived).length;
 updateTeacherNavBadges();
 document.getElementById("teacherExams").innerHTML=data.exams.map(e=>`<div class="exam"><h3>${esc(e.title)}</h3><p>${esc(e.grade)} • ${e.grade==="الكل"?"مدة مختلفة حسب المرحلة":getDuration(e,e.grade)+" دقيقة"}</p><p>عدد الأسئلة: ${e.questions.length}</p><button class="secondary" onclick="toggleExam('${e.id}')">${e.published?"إيقاف النشر":"إعادة النشر"}</button> <button class="danger" onclick="deleteExam('${e.id}')">حذف</button></div>`).join("")||"لا توجد امتحانات.";
+renderTeacherGroups();
 renderTeacherStudents();
 renderRetakeRequests();
 renderTeacherHomeworks();
 document.getElementById("teacherMessages").innerHTML=data.messages.filter(m=>!m.teacherReply&&!m.teacherArchived).map(m=>`<div class="exam"><div class="row"><b>${esc(m.name||"طالب")}</b><span class="tag">${new Date(m.createdAt||Date.now()).toLocaleString("ar-EG")}</span></div><h4>${esc(m.subject)}</h4><p>${esc(m.message)}</p><label>الرد على الطالب</label><textarea id="supportReply_${m.id}" placeholder="اكتب ردك هنا..."></textarea><button class="primary" onclick="replySupport('${m.id}')">إرسال الرد وإخفاء الرسالة</button></div>`).join("")||"لا توجد رسائل دعم تحتاج إلى رد.";
+}
+function renderTeacherGroups(){
+const box=document.getElementById("teacherGroupsList");if(!box)return;
+const groups=data.groups||[];
+box.innerHTML=groups.map(g=>{
+const count=data.students.filter(s=>s.groupId===g.id).length;
+return `<div class="group-chip"><div><b>${esc(g.name)}</b><small>${count} طالب</small></div><button class="danger" onclick="deleteStudentGroup('${g.id}')">حذف المجموعة</button></div>`;
+}).join("")||'<p class="notice">لم يتم إنشاء مجموعات بعد. أنشئ أول مجموعة من الأعلى.</p>';
 }
 function renderTeacherStudents(){
 let box=document.getElementById("teacherResults");
@@ -1126,7 +1238,7 @@ return `<section class="panel"><div class="row"><h3>📚 ${esc(grade)}</h3><span
 students.map(s=>{
 let attempts=s._attempts;
 let averageLabel=s._average<0?"لم يؤدِّ أي امتحان":`متوسط الدرجات: ${s._average.toFixed(1)}%`;
-return `<div class="exam"><div class="row"><h3>${esc(s.name)}</h3><span class="tag">${esc(s.grade)}</span></div><p><b>${averageLabel}</b></p><p>رقم ولي الأمر: ${esc(s.phone)}</p><p>تاريخ التسجيل: ${new Date(s.createdAt).toLocaleDateString("ar-EG")}</p><p>عدد الامتحانات: ${attempts.length}</p><p>كود ولي الأمر: <b>${esc(s.parentCode||"-")}</b></p>${isBanned(s)?`<p style="color:#d94b63"><b>${banText(s)}</b></p>`:""}<div class="actions"><button class="secondary" onclick="viewStudentProfile('${s.id}')">فتح الملف الشخصي الكامل</button>${isBanned(s)?`<button class="success" onclick="unbanStudent('${s.id}')">فك الحظر</button>`:`<button class="danger" onclick="banStudent('${s.id}')">حظر</button>`}<button class="secondary" onclick="resetPass('${s.id}')">إعادة تعيين الباسورد</button><button class="danger" onclick="deleteStudent('${s.id}')">حذف الطالب</button></div>${attempts.map(a=>`<div class="notice"><b>${esc(a.title)}</b><br>الدرجة الحالية: ${getAttemptScore(a)}/${a.total}<br>${a.reviewed?"تم التصحيح":"توجد إجابات تحتاج إلى مراجعة"}<br>${new Date(a.submittedAt).toLocaleString("ar-EG")}<div class="actions"><button class="secondary" onclick="reviewAttempt('${a.id}')">عرض الإجابات وتصحيحها</button><button class="secondary" onclick="editAttemptScore('${a.id}')">تعديل الدرجة النهائية</button><button class="secondary" onclick="toggleResult('${a.id}')">${a.visible?"إخفاء النتيجة":"إظهار النتيجة"}</button></div></div>`).join("")}</div>`;
+return `<div class="exam"><div class="row"><h3>${esc(s.name)}</h3><span class="tag">${esc(s.grade)}</span></div><p><b>${averageLabel}</b></p><p>رقم ولي الأمر: ${esc(s.phone)}</p><p>تاريخ التسجيل: ${new Date(s.createdAt).toLocaleDateString("ar-EG")}</p><p>عدد الامتحانات: ${attempts.length}</p><p><b>المجموعة:</b> ${esc(groupName(s.groupId))}</p><p>كود ولي الأمر: <b>${esc(s.parentCode||"-")}</b></p>${isBanned(s)?`<p style="color:#d94b63"><b>${banText(s)}</b></p>`:""}<div class="actions"><button class="secondary" onclick="viewStudentProfile('${s.id}')">فتح الملف الشخصي الكامل</button>${isBanned(s)?`<button class="success" onclick="unbanStudent('${s.id}')">فك الحظر</button>`:`<button class="danger" onclick="banStudent('${s.id}')">حظر</button>`}<button class="secondary" onclick="resetPass('${s.id}')">إعادة تعيين الباسورد</button><button class="danger" onclick="deleteStudent('${s.id}')">حذف الطالب</button></div>${attempts.map(a=>`<div class="notice"><b>${esc(a.title)}</b><br>الدرجة الحالية: ${getAttemptScore(a)}/${a.total}<br>${a.reviewed?"تم التصحيح":"توجد إجابات تحتاج إلى مراجعة"}<br>${new Date(a.submittedAt).toLocaleString("ar-EG")}<div class="actions"><button class="secondary" onclick="reviewAttempt('${a.id}')">عرض الإجابات وتصحيحها</button><button class="secondary" onclick="editAttemptScore('${a.id}')">تعديل الدرجة النهائية</button><button class="secondary" onclick="toggleResult('${a.id}')">${a.visible?"إخفاء النتيجة":"إظهار النتيجة"}</button></div></div>`).join("")}</div>`;
 }).join("")+`</section>`;
 }).join("");
 if(!filtered.length)box.innerHTML='<div class="notice">لا يوجد طلاب مطابقون للبحث أو المرحلة المحددة.</div>';
@@ -1140,7 +1252,7 @@ a.finalScore=n;a.score=n;a.reviewed=true;a.visible=true;save();renderTeacher();a
 }
 function viewStudentProfile(id){
 let s=data.students.find(x=>x.id===id);if(!s)return;let attempts=data.attempts.filter(a=>a.studentId===id);
-document.getElementById("reviewContent").innerHTML=`<h2>الملف الشخصي للطالب</h2><div class="exam"><p><b>الاسم:</b> ${esc(s.name)}</p><p><b>رقم ولي الأمر:</b> ${esc(s.phone)}</p><p><b>الصف:</b> ${esc(s.grade)}</p><p><b>كود ولي الأمر:</b> ${esc(s.parentCode||"-")}</p><p><b>تاريخ التسجيل:</b> ${new Date(s.createdAt).toLocaleString("ar-EG")}</p><p><b>عدد المحاولات:</b> ${attempts.length}</p></div><h3>📚 واجبات الطالب</h3>${homeworksForStudent(id).map(renderHomeworkCard).join("")||"<p>لا توجد واجبات مرسلة.</p>"}<h3>سجل الامتحانات</h3>${attempts.map(a=>`<div class="exam"><b>${esc(a.title)}</b><p>الدرجة: ${getAttemptScore(a)}/${a.total}</p><p>تاريخ التسليم: ${new Date(a.submittedAt).toLocaleString("ar-EG")}</p><button class="secondary" onclick="reviewAttempt('${a.id}')">عرض الإجابات</button> <button class="secondary" onclick="editAttemptScore('${a.id}')">تعديل الدرجة</button></div>`).join("")||"<p>لا توجد امتحانات.</p>"}`;
+document.getElementById("reviewContent").innerHTML=`<h2>الملف الشخصي للطالب</h2><div class="exam"><p><b>الاسم:</b> ${esc(s.name)}</p><p><b>رقم ولي الأمر:</b> ${esc(s.phone)}</p><p><b>الصف:</b> ${esc(s.grade)}</p><p><b>المجموعة:</b> ${esc(groupName(s.groupId))}</p><p><b>كود ولي الأمر:</b> ${esc(s.parentCode||"-")}</p><p><b>تاريخ التسجيل:</b> ${new Date(s.createdAt).toLocaleString("ar-EG")}</p><p><b>عدد المحاولات:</b> ${attempts.length}</p></div><h3>📚 واجبات الطالب</h3>${homeworksForStudent(id).map(renderHomeworkCard).join("")||"<p>لا توجد واجبات مرسلة.</p>"}<h3>سجل الامتحانات</h3>${attempts.map(a=>`<div class="exam"><b>${esc(a.title)}</b><p>الدرجة: ${getAttemptScore(a)}/${a.total}</p><p>تاريخ التسليم: ${new Date(a.submittedAt).toLocaleString("ar-EG")}</p><button class="secondary" onclick="reviewAttempt('${a.id}')">عرض الإجابات</button> <button class="secondary" onclick="editAttemptScore('${a.id}')">تعديل الدرجة</button></div>`).join("")||"<p>لا توجد امتحانات.</p>"}`;
 show("reviewAttempt");
 }
 function getAnswerForLeaf(a,leaf){
@@ -1342,7 +1454,8 @@ exams:data.exams||[],
 attempts:data.attempts||[],
 messages:data.messages||[],
 retakeRequests:data.retakeRequests||[],
-homeworks:data.homeworks||[]
+homeworks:data.homeworks||[],
+groups:data.groups||[]
 };
 }
 
@@ -1407,6 +1520,7 @@ data.attempts.forEach(a=>{if(typeof a.teacherSeen==="undefined")a.teacherSeen=tr
 data.messages=Array.isArray(row.data.messages)?row.data.messages:[];
 data.retakeRequests=Array.isArray(row.data.retakeRequests)?row.data.retakeRequests:[];
 data.homeworks=Array.isArray(row.data.homeworks)?row.data.homeworks:[];
+data.groups=Array.isArray(row.data.groups)?row.data.groups:[];
 localStorage.setItem(KEY,JSON.stringify(data));
 syncApplying=false;
 syncLastUpdated=row.updated_at||null;
@@ -1439,12 +1553,12 @@ const cloudHasData=
 (cloud.students||[]).length+
 (cloud.exams||[]).length+
 (cloud.attempts||[]).length+
-(cloud.messages||[]).length+(cloud.retakeRequests||[]).length>0;
+(cloud.messages||[]).length+(cloud.retakeRequests||[]).length+(cloud.groups||[]).length>0;
 const localHasData=
 (data.students||[]).length+
 (data.exams||[]).length+
 (data.attempts||[]).length+
-(data.messages||[]).length+(data.retakeRequests||[]).length>0;
+(data.messages||[]).length+(data.retakeRequests||[]).length+(data.groups||[]).length>0;
 
 if(cloudHasData||!localHasData){
 applyCloudData(remote);
@@ -1461,12 +1575,12 @@ const cloudHasData=
 (cloud.students||[]).length+
 (cloud.exams||[]).length+
 (cloud.attempts||[]).length+
-(cloud.messages||[]).length+(cloud.retakeRequests||[]).length>0;
+(cloud.messages||[]).length+(cloud.retakeRequests||[]).length+(cloud.groups||[]).length>0;
 const localHasData=
 (data.students||[]).length+
 (data.exams||[]).length+
 (data.attempts||[]).length+
-(data.messages||[]).length+(data.retakeRequests||[]).length>0;
+(data.messages||[]).length+(data.retakeRequests||[]).length+(data.groups||[]).length>0;
 if(!cloudHasData&&localHasData){
 await writeCloudData();
 }else{
