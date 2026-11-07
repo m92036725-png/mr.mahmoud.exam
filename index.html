@@ -501,7 +501,8 @@ body.dark .group-chip{background:#273449;border-color:#3d4b60;color:#e5e7eb}
 <hr>
 <div class="row"><h3>الأسئلة</h3><button class="secondary" onclick="addQuestion()">+ إضافة سؤال</button></div>
 <div id="questionBuilder"></div>
-<button class="primary" onclick="publishExam()">نشر الامتحان</button><p id="examError"></p>
+<button class="primary" id="publishExamButton" onclick="publishExam()">نشر الامتحان</button>
+<button type="button" class="secondary hidden" id="cancelEditExamButton" onclick="cancelEditExam()">إلغاء التعديل</button><p id="examError"></p>
 </div>
 <div id="teacherExamsSection"><h2>إدارة الامتحانات</h2><div id="teacherExams"></div></div>
 <div id="teacherStudentsSection">
@@ -617,7 +618,7 @@ const TEACHER_PASSWORD="mahmoudkhater1983";
 const KEY="mahmoud_khater_platform_v2";
 const GRADES=["الرابع الابتدائي","الخامس الابتدائي","السادس الابتدائي","الأول الإعدادي","الثاني الإعدادي","الثالث الإعدادي","الأول الثانوي","الثاني الثانوي"];
 
-let data=loadData(),questionNumber=0,activeExam=null,timerInterval=null,endTime=null,submitting=false,activeRetakeRequest=null;
+let data=loadData(),questionNumber=0,activeExam=null,timerInterval=null,endTime=null,submitting=false,activeRetakeRequest=null,editingExamId=null;
 if(!Array.isArray(data.retakeRequests))data.retakeRequests=[];
 if(!Array.isArray(data.homeworks))data.homeworks=[];
 // ترحيل المحاولات السابقة حتى لا تظهر إشعارات قديمة بأثر رجعي.
@@ -898,6 +899,49 @@ q.innerHTML=`<div class="row"><b>سؤال القطعة ${n+1}</b><button type="b
 box.appendChild(q);
 }
 
+
+function setField(root,selector,value){const el=root.querySelector(selector);if(el)el.value=value??"";}
+function editExam(id){
+ const e=(data.exams||[]).find(x=>x.id===id);if(!e)return;
+ editingExamId=id;
+ document.getElementById("examTitle").value=e.title||"";
+ document.getElementById("examGrade").value=e.grade||"الكل";
+ renderDurationFields();
+ if(e.grade==="الكل"){
+  document.querySelectorAll(".gradeDuration").forEach(x=>x.value=Number(e.durationByGrade?.[x.dataset.grade]||30));
+ }else{
+  const d=document.getElementById("examDuration");if(d)d.value=getDuration(e,e.grade);
+ }
+ document.getElementById("resultVisibility").value=e.visible?"yes":"no";
+ const builder=document.getElementById("questionBuilder");builder.innerHTML="";questionNumber=0;
+ (e.questions||[]).forEach(q=>{
+  addQuestion();const root=builder.lastElementChild,idNum=Number(root.id.replace("question_",""));
+  root.querySelector(".qtype").value=q.type;changeType(idNum,q.type);
+  if(q.type==="mcq"){setField(root,".qtext",q.text);setField(root,".qpoints",q.points);setField(root,".qoptions",(q.options||[]).join("\n"));setField(root,".qcorrect",q.correct);}
+  if(q.type==="tf"){setField(root,".qtext",q.text);setField(root,".qpoints",q.points);setField(root,".qcorrect",q.correct);}
+  if(q.type==="correct"){setField(root,".correctSentence",q.sentence);renderWrongWords(idNum);setField(root,".wrongWord",q.wrongWord);setField(root,".correctWord",q.correctWord);setField(root,".qpoints",q.points);}
+  if(q.type==="rewrite"){setField(root,".originalWord",q.originalWord);setField(root,".replacementWord",q.replacementWord);setField(root,".rewriteExpected",q.expected);setField(root,".qpoints",q.points);}
+  if(q.type==="dialog"){
+   setField(root,".personA",q.personA);setField(root,".personB",q.personB);
+   const box=root.querySelector(".dialogLines");box.innerHTML="";
+   (q.lines||[]).forEach(line=>{addDialogLine(idNum);const el=box.lastElementChild;setField(el,".lineSpeaker",line.speaker);setField(el,".lineText",line.text);const cb=el.querySelector(".lineBlank");cb.checked=!!line.blank;el.querySelector(".blankSettings").classList.toggle("hidden",!line.blank);if(line.blank){setField(el,".lineOptions",(line.options||[]).join("\n"));setField(el,".lineCorrect",line.correct);setField(el,".linePoints",line.points);}});
+  }
+  if(q.type==="passage"){
+   setField(root,".passageText",q.passage);const box=root.querySelector("#passageQuestions_"+idNum);box.innerHTML="";
+   (q.subquestions||[]).forEach(sub=>{addPassageQuestion(idNum);const el=box.lastElementChild;setField(el,".subType",sub.type);el.querySelector(".subType").dispatchEvent(new Event("change"));setField(el,".subText",sub.text);setField(el,".subPoints",sub.points);if(sub.type==="mcq"){setField(el,".subOptions",(sub.options||[]).join("\n"));setField(el,".subCorrect",sub.correct);}else setField(el,".subExpected",sub.expected);});
+  }
+ });
+ document.getElementById("publishExamButton").textContent="حفظ التعديلات";
+ document.getElementById("cancelEditExamButton").classList.remove("hidden");
+ document.getElementById("examError").textContent="أنت تعدّل الآن: "+e.title+" — لن يتم إنشاء امتحان جديد.";
+ document.getElementById("teacherCreateExamSection").scrollIntoView({behavior:"smooth",block:"start"});
+}
+function cancelEditExam(){
+ editingExamId=null;document.getElementById("examTitle").value="";document.getElementById("questionBuilder").innerHTML="";questionNumber=0;
+ document.getElementById("publishExamButton").textContent="نشر الامتحان";document.getElementById("cancelEditExamButton").classList.add("hidden");
+ document.getElementById("examError").textContent="تم إلغاء التعديل.";
+}
+
 function publishExam(){
 let title=document.getElementById("examTitle").value.trim(),grade=document.getElementById("examGrade").value,durationByGrade={};
 if(grade==="الكل")document.querySelectorAll(".gradeDuration").forEach(x=>durationByGrade[x.dataset.grade]=Number(x.value));
@@ -945,8 +989,19 @@ questions.push(obj);
 });
 let invalidDuration=Object.values(durationByGrade).some(x=>!Number.isFinite(x)||x<1);
 if(!title||invalidDuration||!questions.length||invalid){document.getElementById("examError").textContent="راجع البيانات: تأكد من كتابة جميع الأسئلة والاختيارات والإجابات الصحيحة والدرجات.";return;}
-data.exams.unshift({id:"exam_"+Date.now(),title,grade,duration:durationByGrade[grade]||30,durationByGrade,questions,published:true,publishedAt:Date.now(),visible:document.getElementById("resultVisibility").value==="yes"});
-save();document.getElementById("examTitle").value="";document.getElementById("questionBuilder").innerHTML="";questionNumber=0;document.getElementById("examError").textContent="تم نشر الامتحان بنجاح.";renderTeacher();
+const examData={title,grade,duration:durationByGrade[grade]||30,durationByGrade,questions,visible:document.getElementById("resultVisibility").value==="yes"};
+if(editingExamId){
+ const existing=data.exams.find(x=>x.id===editingExamId);
+ if(!existing){document.getElementById("examError").textContent="لم يتم العثور على الامتحان المطلوب تعديله.";return;}
+ Object.assign(existing,examData,{updatedAt:Date.now()});
+ editingExamId=null;
+}else{
+ data.exams.unshift({id:"exam_"+Date.now(),...examData,published:true,publishedAt:Date.now()});
+}
+save();document.getElementById("examTitle").value="";document.getElementById("questionBuilder").innerHTML="";questionNumber=0;
+document.getElementById("publishExamButton").textContent="نشر الامتحان";
+document.getElementById("cancelEditExamButton").classList.add("hidden");
+document.getElementById("examError").textContent="تم حفظ الامتحان بنجاح.";renderTeacher();
 }
 function getDuration(exam,grade){return Number(exam.durationByGrade?.[grade]||exam.duration||30);}
 function getLeaves(exam){
@@ -1208,7 +1263,18 @@ document.getElementById("examCount").textContent=data.exams.length;
 document.getElementById("attemptCount").textContent=data.attempts.length;
 document.getElementById("messageCount").textContent=(data.messages||[]).filter(m=>!m.teacherReply&&!m.teacherArchived).length;
 updateTeacherNavBadges();
-document.getElementById("teacherExams").innerHTML=data.exams.map(e=>`<div class="exam"><h3>${esc(e.title)}</h3><p>${esc(e.grade)} • ${e.grade==="الكل"?"مدة مختلفة حسب المرحلة":getDuration(e,e.grade)+" دقيقة"}</p><p>عدد الأسئلة: ${e.questions.length}</p><button class="secondary" onclick="toggleExam('${e.id}')">${e.published?"إيقاف النشر":"إعادة النشر"}</button> <button class="danger" onclick="deleteExam('${e.id}')">حذف</button></div>`).join("")||"لا توجد امتحانات.";
+document.getElementById("teacherExams").innerHTML=data.exams.map(e=>{
+ const eligible=(data.students||[]).filter(st=>e.grade==="الكل"||st.grade===e.grade);
+ const doneIds=new Set((data.attempts||[]).filter(a=>a.examId===e.id).map(a=>a.studentId));
+ const done=eligible.filter(st=>doneIds.has(st.id)),notDone=eligible.filter(st=>!doneIds.has(st.id));
+ const roster=(arr,empty)=>arr.length?arr.map(st=>`<div class="row" style="padding:7px 0;border-bottom:1px solid #e7ebf5"><span>${esc(st.name||"طالب")}</span><span class="small">${esc(st.grade||"")}</span></div>`).join(""):`<p class="small">${empty}</p>`;
+ return `<div class="exam"><div class="row"><h3>${esc(e.title)}</h3><span class="tag">${e.published?"منشور":"متوقف"}</span></div>
+ <p>${esc(e.grade)} • ${e.grade==="الكل"?"مدة مختلفة حسب المرحلة":getDuration(e,e.grade)+" دقيقة"}</p><p>عدد الأسئلة: ${e.questions.length}</p>
+ <div class="grid"><div class="duration-item"><b>طلاب المرحلة</b><div class="stat">${eligible.length}</div></div><div class="duration-item"><b>أدوا الامتحان</b><div class="stat">${done.length}</div></div><div class="duration-item"><b>لم يؤدوا الامتحان</b><div class="stat">${notDone.length}</div></div></div>
+ <details><summary><b>أسماء الطلاب الذين أدوا الامتحان (${done.length})</b></summary>${roster(done,"لا يوجد طلاب أدوا هذا الامتحان بعد.")}</details>
+ <details style="margin-top:10px"><summary><b>أسماء الطلاب الذين لم يؤدوا الامتحان (${notDone.length})</b></summary>${roster(notDone,"جميع طلاب المرحلة أدوا الامتحان.")}</details>
+ <div class="actions"><button class="primary" onclick="editExam('${e.id}')">فتح ومراجعة الأسئلة والتعديل</button><button class="secondary" onclick="toggleExam('${e.id}')">${e.published?"إيقاف النشر":"إعادة النشر"}</button><button class="danger" onclick="deleteExam('${e.id}')">حذف</button></div></div>`;
+}).join("")||"لا توجد امتحانات.";
 renderTeacherGroups();
 renderTeacherStudents();
 renderRetakeRequests();
