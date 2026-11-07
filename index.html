@@ -499,8 +499,33 @@ body.dark .group-chip{background:#273449;border-color:#3d4b60;color:#e5e7eb}
 <label>إظهار النتيجة للطالب</label>
 <select id="resultVisibility"><option value="yes">نعم بعد التصحيح</option><option value="no">بعد مراجعة المدرس</option></select>
 <hr>
-<div class="row"><h3>الأسئلة</h3><button class="secondary" onclick="addQuestion()">+ إضافة سؤال</button></div>
+<div class="row"><h3>الأسئلة</h3><span class="tag">اختر طريقة الإدخال</span></div>
+<label for="questionEntryMode">طريقة إضافة الأسئلة</label>
+<select id="questionEntryMode" onchange="toggleQuestionEntryMode()">
+<option value="manual">إضافة يدوية (النظام الحالي)</option>
+<option value="bulk">إضافة جماعية فورية</option>
+</select>
+<div id="manualQuestionEntry">
+<div class="row"><h4>الإدخال اليدوي</h4><button type="button" class="secondary" onclick="addQuestion()">+ إضافة سؤال</button></div>
 <div id="questionBuilder"></div>
+</div>
+<div id="bulkQuestionEntry" class="hidden">
+<div class="notice">الصق كل سؤال في مجموعة منفصلة، واكتب الاختيارات كل اختيار في سطر. ضع علامة ✓ بجانب الاختيار الصحيح. افصل بين الأسئلة بسطر فارغ. سيتم تحويلها إلى أسئلة اختيار من متعدد عادية، ولن تظهر علامة الصح للطلاب.</div>
+<label for="bulkQuestionsText">الأسئلة والاختيارات</label>
+<textarea id="bulkQuestionsText" style="min-height:260px" placeholder="What is the opposite of big?
+small
+✓ large
+tall
+short
+
+She ........ to school every day.
+go
+✓ goes
+going
+went"></textarea>
+<div class="actions"><button type="button" class="primary" onclick="importBulkQuestions()">تحويل وإضافة الأسئلة</button><button type="button" class="secondary" onclick="document.getElementById('bulkQuestionsText').value=''">مسح النص</button></div>
+<p id="bulkImportStatus" class="small"></p>
+</div>
 <button class="primary" id="publishExamButton" onclick="publishExam()">نشر الامتحان</button>
 <button type="button" class="secondary hidden" id="cancelEditExamButton" onclick="cancelEditExam()">إلغاء التعديل</button><p id="examError"></p>
 </div>
@@ -589,7 +614,7 @@ body.dark .group-chip{background:#273449;border-color:#3d4b60;color:#e5e7eb}
 <div id="parentLogin">
 <label>اسم الطالب (اختياري)</label><input id="parentStudentName" placeholder="اسم الطالب">
 <label>كود ولي الأمر</label><input id="parentCodeInput" placeholder="مثال: AB123456" style="direction:ltr;text-transform:uppercase">
-<button class="primary" onclick="parentLogin()">دخول</button><p id="parentError"></p>
+<button class="primary" onclick="parentLogin()">دخول</button><p id="parentError"></p><p class="small">استخدم كود ولي الأمر الموجود في حساب أي ابن مسجل لديك. بعد الدخول يمكنك إضافة بقية الأبناء.</p>
 </div>
 <div id="parentView" class="hidden"></div>
 </div>
@@ -619,8 +644,8 @@ const KEY="mahmoud_khater_platform_v2";
 const GRADES=["الرابع الابتدائي","الخامس الابتدائي","السادس الابتدائي","الأول الإعدادي","الثاني الإعدادي","الثالث الإعدادي","الأول الثانوي","الثاني الثانوي"];
 
 let data=loadData(),questionNumber=0,activeExam=null,timerInterval=null,endTime=null,submitting=false,activeRetakeRequest=null,editingExamId=null;
-if(!Array.isArray(data.retakeRequests))data.retakeRequests=[];
-if(!Array.isArray(data.homeworks))data.homeworks=[];
+// ضمان وجود كل القوائم حتى مع بيانات قديمة محفوظة قبل إضافة بعض الخصائص.
+["students","exams","attempts","messages","groups","retakeRequests","homeworks"].forEach(k=>{if(!Array.isArray(data[k]))data[k]=[];});
 // ترحيل المحاولات السابقة حتى لا تظهر إشعارات قديمة بأثر رجعي.
 if(!Array.isArray(data.attempts))data.attempts=[];
 data.attempts.forEach(a=>{if(typeof a.teacherSeen==="undefined")a.teacherSeen=true;});
@@ -869,6 +894,41 @@ let id=++questionNumber,el=document.createElement("div");el.className="question"
 el.innerHTML=`<div class="row"><b>السؤال ${id}</b><button class="danger" onclick="document.getElementById('question_${id}').remove()">حذف السؤال</button></div><label>نوع السؤال</label><select class="qtype" onchange="changeType(${id},this.value)"><option value="mcq">اختيار من متعدد</option><option value="tf">True / False</option><option value="rewrite">Rewrite</option><option value="correct">Correct</option><option value="dialog">Dialog</option><option value="passage">قطعة وأسئلة عليها</option></select><div class="typeArea" id="typeArea_${id}"></div>`;
 document.getElementById("questionBuilder").appendChild(el);changeType(id,"mcq");
 }
+function toggleQuestionEntryMode(){
+const mode=document.getElementById("questionEntryMode")?.value||"manual";
+document.getElementById("manualQuestionEntry").classList.toggle("hidden",mode!=="manual");
+document.getElementById("bulkQuestionEntry").classList.toggle("hidden",mode!=="bulk");
+}
+function parseBulkQuestionBlocks(raw){
+const normalized=String(raw||"").replace(/\r/g,"").replace(/[\t ]+$/gm,"").trim();
+if(!normalized)return [];
+return normalized.split(/\n\s*\n+/).map(block=>block.split("\n").map(x=>x.trim()).filter(Boolean)).filter(lines=>lines.length);
+}
+function importBulkQuestions(){
+const status=document.getElementById("bulkImportStatus"),raw=document.getElementById("bulkQuestionsText").value;
+const blocks=parseBulkQuestionBlocks(raw);if(!blocks.length){status.textContent="الصق الأسئلة أولاً.";return false;}
+const parsed=[];let errors=[];
+blocks.forEach((lines,index)=>{
+ const question=lines[0];
+ const options=lines.slice(1).map(line=>{const marked=/(?:^|\s)(?:✓|✔|☑|✅)(?:\s|$)/.test(line);return {text:line.replace(/[✓✔☑✅]/g,"").replace(/^(?:[A-Da-d]|[1-4])[.)、:-]\s*/,"").trim(),marked};}).filter(x=>x.text);
+ const correct=options.findIndex(x=>x.marked);
+ if(!question||options.length<2||options.length>6||correct<0||options.filter(x=>x.marked).length!==1){errors.push(index+1);return;}
+ parsed.push({text:question,options:options.map(x=>x.text),correct:correct+1});
+});
+if(errors.length){status.textContent="لم تتم الإضافة. راجع السؤال/الأسئلة رقم: "+errors.join("، ")+" — يجب أن يحتوي كل سؤال على اختيارين على الأقل وعلامة ✓ واحدة فقط بجانب الإجابة الصحيحة.";return;}
+parsed.forEach(item=>{
+ addQuestion();const root=document.getElementById("question_"+questionNumber);
+ root.querySelector(".qtext").value=item.text;
+ root.querySelector(".qoptions").value=item.options.join("\n");
+ root.querySelector(".qcorrect").value=String(item.correct);
+});
+document.getElementById("bulkQuestionsText").value="";
+status.textContent="تم تحويل وإضافة "+parsed.length+" سؤال بنجاح. يمكنك مراجعتها وتعديلها من الإدخال اليدوي قبل نشر الامتحان.";
+document.getElementById("questionEntryMode").value="manual";toggleQuestionEntryMode();
+document.getElementById("questionBuilder").scrollIntoView({behavior:"smooth",block:"start"});
+return true;
+}
+
 function changeType(id,type){
 let area=document.getElementById("typeArea_"+id),html="";
 if(type==="mcq")html=`<label>السؤال</label><textarea class="qtext"></textarea><label>الدرجة</label><input class="qpoints" type="number" value="1" min="0.5" step="0.5"><label>الاختيارات (كل اختيار في سطر)</label><textarea class="qoptions" placeholder="Option A&#10;Option B&#10;Option C&#10;Option D"></textarea><label>رقم الإجابة الصحيحة</label><input class="qcorrect" type="number" min="1" value="1">`;
@@ -938,70 +998,98 @@ function editExam(id){
 }
 function cancelEditExam(){
  editingExamId=null;document.getElementById("examTitle").value="";document.getElementById("questionBuilder").innerHTML="";questionNumber=0;
+ document.getElementById("questionEntryMode").value="manual";toggleQuestionEntryMode();document.getElementById("bulkImportStatus").textContent="";
  document.getElementById("publishExamButton").textContent="نشر الامتحان";document.getElementById("cancelEditExamButton").classList.add("hidden");
  document.getElementById("examError").textContent="تم إلغاء التعديل.";
 }
 
 function publishExam(){
-let title=document.getElementById("examTitle").value.trim(),grade=document.getElementById("examGrade").value,durationByGrade={};
-if(grade==="الكل")document.querySelectorAll(".gradeDuration").forEach(x=>durationByGrade[x.dataset.grade]=Number(x.value));
-else durationByGrade[grade]=Number(document.getElementById("examDuration").value);
-let questions=[],invalid=false;
-document.querySelectorAll("#questionBuilder .question").forEach(q=>{
-let type=q.querySelector(".qtype").value,obj={type};
-if(type==="mcq"){
-obj.text=q.querySelector(".qtext").value.trim();obj.points=Number(q.querySelector(".qpoints").value);obj.options=q.querySelector(".qoptions").value.split("\n").map(x=>x.trim()).filter(Boolean);obj.correct=Number(q.querySelector(".qcorrect").value);
-if(!obj.text||obj.points<=0||obj.options.length<2||obj.correct<1||obj.correct>obj.options.length)invalid=true;
-}
-if(type==="tf"){
-obj.text=q.querySelector(".qtext").value.trim();obj.points=Number(q.querySelector(".qpoints").value);obj.correct=Number(q.querySelector(".qcorrect").value);
-if(!obj.text||obj.points<=0)invalid=true;
-}
-if(type==="correct"){
-obj.sentence=q.querySelector(".correctSentence").value.trim();obj.wrongWord=q.querySelector(".wrongWord").value.trim();obj.correctWord=q.querySelector(".correctWord").value.trim();obj.points=Number(q.querySelector(".qpoints").value);
-if(!obj.sentence||!obj.wrongWord||!obj.correctWord||obj.points<=0)invalid=true;
-}
-if(type==="rewrite"){
-obj.originalWord=q.querySelector(".originalWord").value.trim();obj.replacementWord=q.querySelector(".replacementWord").value.trim();obj.expected=q.querySelector(".rewriteExpected").value.trim();obj.points=Number(q.querySelector(".qpoints").value);
-if(!obj.originalWord||!obj.replacementWord||!obj.expected||obj.points<=0)invalid=true;
-}
-if(type==="dialog"){
-obj.personA=q.querySelector(".personA").value.trim();obj.personB=q.querySelector(".personB").value.trim();obj.lines=[];
-q.querySelectorAll(".dialog-line").forEach(line=>{
-let blank=line.querySelector(".lineBlank").checked,item={speaker:line.querySelector(".lineSpeaker").value,text:line.querySelector(".lineText").value.trim(),blank,options:[],correct:1,points:0};
-if(blank){item.options=line.querySelector(".lineOptions").value.split("\n").map(x=>x.trim()).filter(Boolean);item.correct=Number(line.querySelector(".lineCorrect").value);item.points=Number(line.querySelector(".linePoints").value);if(item.options.length<2||item.correct<1||item.correct>item.options.length||item.points<=0)invalid=true;}
-else if(!item.text)invalid=true;
-obj.lines.push(item);
-});
-if(!obj.personA||!obj.personB||!obj.lines.length||!obj.lines.some(x=>x.blank))invalid=true;
-}
-if(type==="passage"){
-obj.passage=q.querySelector(".passageText").value.trim();obj.subquestions=[];
-q.querySelectorAll(".passage-sub").forEach(sub=>{
-let st=sub.querySelector(".subType").value,item={type:st,text:sub.querySelector(".subText").value.trim(),points:Number(sub.querySelector(".subPoints").value)};
-if(st==="mcq"){item.options=sub.querySelector(".subOptions").value.split("\n").map(x=>x.trim()).filter(Boolean);item.correct=Number(sub.querySelector(".subCorrect").value);if(item.options.length<2||item.correct<1||item.correct>item.options.length)invalid=true;}
-else{item.expected=sub.querySelector(".subExpected").value.trim();if(!item.expected)invalid=true;}
-if(!item.text||item.points<=0)invalid=true;obj.subquestions.push(item);
-});
-if(!obj.passage||!obj.subquestions.length)invalid=true;
-}
-questions.push(obj);
-});
-let invalidDuration=Object.values(durationByGrade).some(x=>!Number.isFinite(x)||x<1);
-if(!title||invalidDuration||!questions.length||invalid){document.getElementById("examError").textContent="راجع البيانات: تأكد من كتابة جميع الأسئلة والاختيارات والإجابات الصحيحة والدرجات.";return;}
-const examData={title,grade,duration:durationByGrade[grade]||30,durationByGrade,questions,visible:document.getElementById("resultVisibility").value==="yes"};
-if(editingExamId){
- const existing=data.exams.find(x=>x.id===editingExamId);
- if(!existing){document.getElementById("examError").textContent="لم يتم العثور على الامتحان المطلوب تعديله.";return;}
- Object.assign(existing,examData,{updatedAt:Date.now()});
- editingExamId=null;
-}else{
- data.exams.unshift({id:"exam_"+Date.now(),...examData,published:true,publishedAt:Date.now()});
-}
-save();document.getElementById("examTitle").value="";document.getElementById("questionBuilder").innerHTML="";questionNumber=0;
-document.getElementById("publishExamButton").textContent="نشر الامتحان";
-document.getElementById("cancelEditExamButton").classList.add("hidden");
-document.getElementById("examError").textContent="تم حفظ الامتحان بنجاح.";renderTeacher();
+ const errorBox=document.getElementById("examError");
+ try{
+  // إذا ضغط المدرس على النشر وهو ما زال في وضع الإدخال الجماعي، حوّل النص أولاً.
+  const mode=document.getElementById("questionEntryMode");
+  const bulkText=document.getElementById("bulkQuestionsText");
+  if(mode&&mode.value==="bulk"&&bulkText&&bulkText.value.trim()){
+   if(importBulkQuestions()!==true)return;
+  }
+  const title=document.getElementById("examTitle").value.trim();
+  const grade=document.getElementById("examGrade").value;
+  const durationByGrade={};
+  if(grade==="الكل"){
+   const durationInputs=[...document.querySelectorAll(".gradeDuration")];
+   if(durationInputs.length){durationInputs.forEach(x=>durationByGrade[x.dataset.grade]=Number(x.value));}
+   else {const fallback=Number(document.getElementById("examDuration")?.value||30);GRADES.forEach(g=>durationByGrade[g]=fallback);}
+  }else{
+   durationByGrade[grade]=Number(document.getElementById("examDuration")?.value||30);
+  }
+  const questions=[];let invalid=false;
+  document.querySelectorAll("#questionBuilder .question").forEach(q=>{
+   const type=q.querySelector(".qtype")?.value,obj={type};
+   if(type==="mcq"){
+    obj.text=q.querySelector(".qtext").value.trim();obj.points=Number(q.querySelector(".qpoints").value);obj.options=q.querySelector(".qoptions").value.split("\n").map(x=>x.trim()).filter(Boolean);obj.correct=Number(q.querySelector(".qcorrect").value);
+    if(!obj.text||!Number.isFinite(obj.points)||obj.points<=0||obj.options.length<2||!Number.isInteger(obj.correct)||obj.correct<1||obj.correct>obj.options.length)invalid=true;
+   }
+   if(type==="tf"){
+    obj.text=q.querySelector(".qtext").value.trim();obj.points=Number(q.querySelector(".qpoints").value);obj.correct=Number(q.querySelector(".qcorrect").value);
+    if(!obj.text||obj.points<=0||![1,2].includes(obj.correct))invalid=true;
+   }
+   if(type==="correct"){
+    obj.sentence=q.querySelector(".correctSentence").value.trim();obj.wrongWord=q.querySelector(".wrongWord").value.trim();obj.correctWord=q.querySelector(".correctWord").value.trim();obj.points=Number(q.querySelector(".qpoints").value);
+    if(!obj.sentence||!obj.wrongWord||!obj.correctWord||obj.points<=0)invalid=true;
+   }
+   if(type==="rewrite"){
+    obj.originalWord=q.querySelector(".originalWord").value.trim();obj.replacementWord=q.querySelector(".replacementWord").value.trim();obj.expected=q.querySelector(".rewriteExpected").value.trim();obj.points=Number(q.querySelector(".qpoints").value);
+    if(!obj.originalWord||!obj.replacementWord||!obj.expected||obj.points<=0)invalid=true;
+   }
+   if(type==="dialog"){
+    obj.personA=q.querySelector(".personA").value.trim();obj.personB=q.querySelector(".personB").value.trim();obj.lines=[];
+    q.querySelectorAll(".dialog-line").forEach(line=>{
+     const blank=line.querySelector(".lineBlank").checked,item={speaker:line.querySelector(".lineSpeaker").value,text:line.querySelector(".lineText").value.trim(),blank,options:[],correct:1,points:0};
+     if(blank){item.options=line.querySelector(".lineOptions").value.split("\n").map(x=>x.trim()).filter(Boolean);item.correct=Number(line.querySelector(".lineCorrect").value);item.points=Number(line.querySelector(".linePoints").value);if(item.options.length<2||item.correct<1||item.correct>item.options.length||item.points<=0)invalid=true;}
+     else if(!item.text)invalid=true;
+     obj.lines.push(item);
+    });
+    if(!obj.personA||!obj.personB||!obj.lines.length||!obj.lines.some(x=>x.blank))invalid=true;
+   }
+   if(type==="passage"){
+    obj.passage=q.querySelector(".passageText").value.trim();obj.subquestions=[];
+    q.querySelectorAll(".passage-sub").forEach(sub=>{
+     const st=sub.querySelector(".subType").value,item={type:st,text:sub.querySelector(".subText").value.trim(),points:Number(sub.querySelector(".subPoints").value)};
+     if(st==="mcq"){item.options=sub.querySelector(".subOptions").value.split("\n").map(x=>x.trim()).filter(Boolean);item.correct=Number(sub.querySelector(".subCorrect").value);if(item.options.length<2||item.correct<1||item.correct>item.options.length)invalid=true;}
+     else{item.expected=sub.querySelector(".subExpected").value.trim();if(!item.expected)invalid=true;}
+     if(!item.text||item.points<=0)invalid=true;obj.subquestions.push(item);
+    });
+    if(!obj.passage||!obj.subquestions.length)invalid=true;
+   }
+   if(!type)invalid=true;
+   questions.push(obj);
+  });
+  const invalidDuration=Object.values(durationByGrade).some(x=>!Number.isFinite(x)||x<1);
+  if(!title){errorBox.textContent="اكتب عنوان الامتحان أولاً.";return;}
+  if(!questions.length){errorBox.textContent="أضف سؤالاً واحداً على الأقل، أو الصق الأسئلة واضغط تحويل وإضافة الأسئلة.";return;}
+  if(invalidDuration){errorBox.textContent="تأكد من أن مدة الامتحان دقيقة واحدة على الأقل لكل مرحلة.";return;}
+  if(invalid){errorBox.textContent="هناك سؤال ناقص أو إجابة صحيحة غير محددة. راجع الأسئلة المظللة أو بياناتها ثم حاول النشر.";return;}
+  if(!Array.isArray(data.exams))data.exams=[];
+  const examData={title,grade,duration:durationByGrade[grade]||Number(Object.values(durationByGrade)[0])||30,durationByGrade,questions,visible:document.getElementById("resultVisibility").value==="yes"};
+  if(editingExamId){
+   const existing=data.exams.find(x=>x.id===editingExamId);
+   if(!existing){errorBox.textContent="لم يتم العثور على الامتحان المطلوب تعديله.";return;}
+   Object.assign(existing,examData,{updatedAt:Date.now()});editingExamId=null;
+  }else{
+   data.exams.unshift({id:"exam_"+Date.now()+"_"+Math.random().toString(36).slice(2,7),...examData,published:true,publishedAt:Date.now()});
+  }
+  save();
+  document.getElementById("examTitle").value="";document.getElementById("questionBuilder").innerHTML="";questionNumber=0;
+  document.getElementById("questionEntryMode").value="manual";toggleQuestionEntryMode();
+  document.getElementById("bulkImportStatus").textContent="";
+  document.getElementById("publishExamButton").textContent="نشر الامتحان";
+  document.getElementById("cancelEditExamButton").classList.add("hidden");
+  errorBox.textContent="تم نشر الامتحان وحفظه بنجاح. تتم مزامنته مع قاعدة البيانات.";
+  try{renderTeacher();}catch(renderError){console.error("Teacher refresh error:",renderError);}
+ }catch(error){
+  console.error("Publish exam error:",error);
+  errorBox.textContent="حدث خطأ أثناء نشر الامتحان: "+(error?.message||"خطأ غير معروف")+". لم يتم مسح الأسئلة؛ أعد المحاولة.";
+ }
 }
 function getDuration(exam,grade){return Number(exam.durationByGrade?.[grade]||exam.duration||30);}
 function getLeaves(exam){
@@ -1258,9 +1346,9 @@ function teacherNavigate(sectionId){
 
 function renderTeacher(){
 if(sessionStorage.getItem("teacher")!=="yes"){show("teacherLogin");return;}
-document.getElementById("studentCount").textContent=data.students.length;
-document.getElementById("examCount").textContent=data.exams.length;
-document.getElementById("attemptCount").textContent=data.attempts.length;
+document.getElementById("studentCount").textContent=(data.students||[]).length;
+document.getElementById("examCount").textContent=(data.exams||[]).length;
+document.getElementById("attemptCount").textContent=(data.attempts||[]).length;
 document.getElementById("messageCount").textContent=(data.messages||[]).filter(m=>!m.teacherReply&&!m.teacherArchived).length;
 updateTeacherNavBadges();
 document.getElementById("teacherExams").innerHTML=data.exams.map(e=>{
@@ -1279,7 +1367,7 @@ renderTeacherGroups();
 renderTeacherStudents();
 renderRetakeRequests();
 renderTeacherHomeworks();
-document.getElementById("teacherMessages").innerHTML=data.messages.filter(m=>!m.teacherReply&&!m.teacherArchived).map(m=>`<div class="exam"><div class="row"><b>${esc(m.name||"طالب")}</b><span class="tag">${new Date(m.createdAt||Date.now()).toLocaleString("ar-EG")}</span></div><h4>${esc(m.subject)}</h4><p>${esc(m.message)}</p><label>الرد على الطالب</label><textarea id="supportReply_${m.id}" placeholder="اكتب ردك هنا..."></textarea><button class="primary" onclick="replySupport('${m.id}')">إرسال الرد وإخفاء الرسالة</button></div>`).join("")||"لا توجد رسائل دعم تحتاج إلى رد.";
+document.getElementById("teacherMessages").innerHTML=(data.messages||[]).filter(m=>!m.teacherReply&&!m.teacherArchived).map(m=>`<div class="exam"><div class="row"><b>${esc(m.name||"طالب")}</b><span class="tag">${new Date(m.createdAt||Date.now()).toLocaleString("ar-EG")}</span></div><h4>${esc(m.subject)}</h4><p>${esc(m.message)}</p><label>الرد على الطالب</label><textarea id="supportReply_${m.id}" placeholder="اكتب ردك هنا..."></textarea><button class="primary" onclick="replySupport('${m.id}')">إرسال الرد وإخفاء الرسالة</button></div>`).join("")||"لا توجد رسائل دعم تحتاج إلى رد.";
 }
 function renderTeacherGroups(){
 const box=document.getElementById("teacherGroupsList");if(!box)return;
@@ -1779,14 +1867,39 @@ if(!s||(name&&normalizeAnswer(name)!==normalizeAnswer(s.name))){err.textContent=
 sessionStorage.setItem("parentCode",code);err.textContent="";renderParent();
 }
 function parentLogout(){sessionStorage.removeItem("parentCode");renderParent();}
+function parentChildrenFor(student){
+ if(!student)return [];
+ const phone=String(student.phone||"").replace(/\D/g,"");
+ return data.students.filter(x=>String(x.phone||"").replace(/\D/g,"")===phone);
+}
+function addParentChild(){
+ const code=sessionStorage.getItem("parentCode"),anchor=code&&data.students.find(x=>x.parentCode===code);
+ if(!anchor){alert("انتهت جلسة ولي الأمر. سجل الدخول مرة أخرى.");parentLogout();return;}
+ const name=(document.getElementById("parentNewChildName").value||"").trim();
+ const grade=document.getElementById("parentNewChildGrade").value;
+ const pass=document.getElementById("parentNewChildPass").value;
+ const err=document.getElementById("parentChildError");
+ if(name.split(/\s+/).length<3||!grade||pass.length<4){err.textContent="أدخل الاسم الثلاثي والصف وكلمة مرور من 4 أحرف على الأقل.";return;}
+ if(data.students.some(x=>x.phone===anchor.phone&&normalizeAnswer(x.name)===normalizeAnswer(name))){err.textContent="هذا الابن مسجل بالفعل بنفس رقم ولي الأمر.";return;}
+ hashPass(pass).then(hash=>{
+  const child={id:"student_"+Date.now()+"_"+Math.random().toString(36).slice(2,7),name,phone:anchor.phone,grade,groupId:"",passHash:hash,parentCode:genParentCode(),createdAt:Date.now()};
+  data.students.push(child);save();
+  document.getElementById("parentNewChildName").value="";document.getElementById("parentNewChildPass").value="";err.textContent="تم إضافة الابن بنجاح. يمكنه الدخول بحسابه وكلمة مروره، وسيظهر هنا تلقائيًا.";
+  renderParent();
+ }).catch(()=>{err.textContent="تعذر إنشاء الحساب. حاول مرة أخرى.";});
+}
 function renderParent(){
-let code=sessionStorage.getItem("parentCode"),s=code&&data.students.find(x=>x.parentCode===code);
-document.getElementById("parentLogin").classList.toggle("hidden",!!s);
-let v=document.getElementById("parentView");v.classList.toggle("hidden",!s);
-if(!s){if(code)sessionStorage.removeItem("parentCode");return;}
-let at=data.attempts.filter(a=>a.studentId===s.id),shown=at.filter(a=>a.visible);
-let avg=shown.length?Math.round(shown.reduce((t,a)=>t+getAttemptScore(a)/(a.total||1)*100,0)/shown.length):0;
-v.innerHTML=`<div class="row"><h3>${esc(s.name)}</h3><button class="danger" onclick="parentLogout()">خروج</button></div><p class="muted">${esc(s.grade)}${isBanned(s)?" • "+banText(s):""}</p><div class="grid"><div class="card">عدد الامتحانات<div class="stat">${at.length}</div></div><div class="card">متوسط المستوى<div class="stat">${avg}%</div></div></div><h3>📚 واجبات الطالب</h3>`+(homeworksForStudent(s.id).map(renderHomeworkCard).join("")||"<p>لا توجد واجبات مرسلة حتى الآن.</p>")+`<h3>سجل الامتحانات</h3>`+(at.map(a=>`<div class="exam"><b>${esc(a.title)}</b><p>${a.visible?"الدرجة: "+getAttemptScore(a)+"/"+a.total:"النتيجة قيد المراجعة"}</p><p class="small">${new Date(a.submittedAt).toLocaleString("ar-EG")}</p></div>`).join("")||"<p>لم يؤد الطالب أي امتحان بعد.</p>");
+ const code=sessionStorage.getItem("parentCode"),s=code&&data.students.find(x=>x.parentCode===code);
+ document.getElementById("parentLogin").classList.toggle("hidden",!!s);
+ const v=document.getElementById("parentView");v.classList.toggle("hidden",!s);
+ if(!s){if(code)sessionStorage.removeItem("parentCode");return;}
+ const children=parentChildrenFor(s);
+ const cards=children.map(child=>{
+  const at=data.attempts.filter(a=>a.studentId===child.id),shown=at.filter(a=>a.visible);
+  const avg=shown.length?Math.round(shown.reduce((t,a)=>t+getAttemptScore(a)/(a.total||1)*100,0)/shown.length):0;
+  return `<div class="panel"><div class="row"><h3>👦 ${esc(child.name)}</h3><span class="tag">${esc(child.grade)}</span></div><p class="muted">${isBanned(child)?banText(child):"حساب الطالب نشط"}</p><div class="grid"><div class="card">عدد الامتحانات<div class="stat">${at.length}</div></div><div class="card">متوسط المستوى<div class="stat">${avg}%</div></div></div><h4>📚 واجبات الطالب</h4>${homeworksForStudent(child.id).map(renderHomeworkCard).join("")||"<p>لا توجد واجبات مرسلة حتى الآن.</p>"}<h4>سجل الامتحانات</h4>${at.map(a=>`<div class="exam"><b>${esc(a.title)}</b><p>${a.visible?"الدرجة: "+getAttemptScore(a)+"/"+a.total:"النتيجة قيد المراجعة"}</p><p class="small">${new Date(a.submittedAt).toLocaleString("ar-EG")}</p></div>`).join("")||"<p>لم يؤد الطالب أي امتحان بعد.</p>"}</div>`;
+ }).join("");
+ v.innerHTML=`<div class="row"><h3>👪 حساب ولي الأمر</h3><button class="danger" onclick="parentLogout()">خروج</button></div><p class="notice">يمكنك متابعة ${children.length} من الأبناء المسجلين بنفس رقم هاتف ولي الأمر. لكل ابن حسابه ونتائجه وواجباته بشكل مستقل.</p>${cards}<div class="panel"><h3>＋ إضافة ابن جديد</h3><p class="muted">أدخل بيانات الابن بالطريقة المعتادة. سيتم ربطه تلقائيًا بنفس رقم هاتف ولي الأمر، ولن تتغير حسابات الأبناء الحاليين.</p><label>اسم الابن الثلاثي</label><input id="parentNewChildName" placeholder="الاسم الثلاثي"><label>الصف الدراسي</label><select id="parentNewChildGrade">${GRADES.map(g=>`<option>${g}</option>`).join("")}</select><label>كلمة مرور حساب الابن</label><input id="parentNewChildPass" type="password" minlength="4" placeholder="4 أحرف على الأقل"><button class="primary" onclick="addParentChild()">إضافة الابن</button><p id="parentChildError" class="small"></p></div>`;
 }
 
 /* ===== طرد تلقائي عند الحذف أو الحظر ===== */
