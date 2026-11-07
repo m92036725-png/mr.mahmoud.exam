@@ -754,16 +754,21 @@ if(name.split(/\s+/).length<3||!phone||!grade||pass.length<4){
 err.textContent="أدخل الاسم الثلاثي ورقم ولي الأمر والصف وكلمة مرور (4 أحرف على الأقل).";return;
 }
 let h=await hashPass(pass);
-let existing=data.students.find(s=>s.phone===phone&&s.name===name);
+const normalizedPhone=String(phone).replace(/\\D/g,"");
+let existing=data.students.find(s=>String(s.phone||"").replace(/\\D/g,"")===normalizedPhone&&normalizeAnswer(s.name)===normalizeAnswer(name));
 if(existing){
 if(isBanned(existing)){err.textContent=banText(existing);return;}
 if(existing.passHash&&existing.passHash!==h){err.textContent="كلمة المرور غير صحيحة.";return;}
 if(!existing.passHash)existing.passHash=h;
-if(!existing.parentCode)existing.parentCode=genParentCode();
+if(!existing.parentCode){
+const family=data.students.find(x=>x.id!==existing.id&&normalizedPhone&&String(x.phone||"").replace(/\\D/g,"")===normalizedPhone&&x.parentCode);
+existing.parentCode=family?.parentCode||genParentCode();
+}
 existing.grade=grade;if(selectedGroup)existing.groupId=selectedGroup;else if(!existing.groupId)existing.groupId="";
 data.student=existing;
 }else{
-data.student={id:"student_"+Date.now(),name,phone,grade,groupId:selectedGroup,passHash:h,parentCode:genParentCode(),createdAt:Date.now()};
+const family=data.students.find(x=>normalizedPhone&&String(x.phone||"").replace(/\\D/g,"")===normalizedPhone&&x.parentCode);
+data.student={id:"student_"+Date.now(),name,phone,grade,groupId:selectedGroup,passHash:h,parentCode:family?.parentCode||genParentCode(),createdAt:Date.now()};
 data.students.push(data.student);
 }
 err.textContent="";document.getElementById("studentPass").value="";
@@ -1859,37 +1864,55 @@ function reviewHomework(id){
 
 /* ===== وضع ولي الأمر ===== */
 function parentLogin(){
-let code=document.getElementById("parentCodeInput").value.trim().toUpperCase();
-let name=document.getElementById("parentStudentName").value.trim();
-let s=data.students.find(x=>x.parentCode===code);
-let err=document.getElementById("parentError");
-if(!s||(name&&normalizeAnswer(name)!==normalizeAnswer(s.name))){err.textContent="الكود غير صحيح أو الاسم لا يطابق.";return;}
-sessionStorage.setItem("parentCode",code);err.textContent="";renderParent();
+ const code=document.getElementById("parentCodeInput").value.trim().toUpperCase();
+ const name=document.getElementById("parentStudentName").value.trim();
+ const err=document.getElementById("parentError");
+ let anchor=data.students.find(x=>String(x.parentCode||"").toUpperCase()===code);
+ if(!anchor){err.textContent="كود ولي الأمر غير صحيح. تأكد من الكود الموجود في حساب ابنك.";return;}
+ // ترحيل الحسابات القديمة: ربط الأبناء المسجلين بنفس رقم ولي الأمر غير الفارغ بكود عائلي واحد.
+ const phone=String(anchor.phone||"").replace(/\\D/g,"");
+ if(phone){
+  data.students.forEach(x=>{
+   if(String(x.phone||"").replace(/\\D/g,"")===phone)x.parentCode=code;
+  });
+ }
+ const family=data.students.filter(x=>x.parentCode===code);
+ if(name&&!family.some(x=>normalizeAnswer(x.name)===normalizeAnswer(name))){
+  err.textContent="اسم الطالب غير مرتبط بهذا الكود. استخدم اسم أحد الأبناء المسجلين بنفس رقم ولي الأمر.";
+  return;
+ }
+ sessionStorage.setItem("parentCode",code);
+ err.textContent="";
+ save();
+ renderParent();
 }
 function parentLogout(){sessionStorage.removeItem("parentCode");renderParent();}
 function parentChildrenFor(student){
  if(!student)return [];
- const phone=String(student.phone||"").replace(/\D/g,"");
- return data.students.filter(x=>String(x.phone||"").replace(/\D/g,"")===phone);
+ const code=String(student.parentCode||"").toUpperCase();
+ if(!code)return [student];
+ return data.students.filter(x=>String(x.parentCode||"").toUpperCase()===code);
 }
 function addParentChild(){
- const code=sessionStorage.getItem("parentCode"),anchor=code&&data.students.find(x=>x.parentCode===code);
+ const code=sessionStorage.getItem("parentCode"),anchor=code&&data.students.find(x=>String(x.parentCode||"").toUpperCase()===code);
  if(!anchor){alert("انتهت جلسة ولي الأمر. سجل الدخول مرة أخرى.");parentLogout();return;}
  const name=(document.getElementById("parentNewChildName").value||"").trim();
  const grade=document.getElementById("parentNewChildGrade").value;
  const pass=document.getElementById("parentNewChildPass").value;
  const err=document.getElementById("parentChildError");
- if(name.split(/\s+/).length<3||!grade||pass.length<4){err.textContent="أدخل الاسم الثلاثي والصف وكلمة مرور من 4 أحرف على الأقل.";return;}
- if(data.students.some(x=>x.phone===anchor.phone&&normalizeAnswer(x.name)===normalizeAnswer(name))){err.textContent="هذا الابن مسجل بالفعل بنفس رقم ولي الأمر.";return;}
+ if(name.split(/\\s+/).length<3||!grade||pass.length<4){err.textContent="أدخل الاسم الثلاثي والصف وكلمة مرور من 4 أحرف على الأقل.";return;}
+ if(parentChildrenFor(anchor).some(x=>normalizeAnswer(x.name)===normalizeAnswer(name))){err.textContent="هذا الابن مسجل بالفعل في حساب ولي الأمر.";return;}
  hashPass(pass).then(hash=>{
-  const child={id:"student_"+Date.now()+"_"+Math.random().toString(36).slice(2,7),name,phone:anchor.phone,grade,groupId:"",passHash:hash,parentCode:genParentCode(),createdAt:Date.now()};
+  const child={id:"student_"+Date.now()+"_"+Math.random().toString(36).slice(2,7),name,phone:anchor.phone,grade,groupId:"",passHash:hash,parentCode:code,createdAt:Date.now()};
   data.students.push(child);save();
-  document.getElementById("parentNewChildName").value="";document.getElementById("parentNewChildPass").value="";err.textContent="تم إضافة الابن بنجاح. يمكنه الدخول بحسابه وكلمة مروره، وسيظهر هنا تلقائيًا.";
+  document.getElementById("parentNewChildName").value="";
+  document.getElementById("parentNewChildPass").value="";
+  err.textContent="تم إضافة الابن بنجاح. سيظهر الآن ضمن الأبناء المرتبطين بحسابك.";
   renderParent();
  }).catch(()=>{err.textContent="تعذر إنشاء الحساب. حاول مرة أخرى.";});
 }
 function renderParent(){
- const code=sessionStorage.getItem("parentCode"),s=code&&data.students.find(x=>x.parentCode===code);
+ const code=sessionStorage.getItem("parentCode"),s=code&&data.students.find(x=>String(x.parentCode||"").toUpperCase()===code);
  document.getElementById("parentLogin").classList.toggle("hidden",!!s);
  const v=document.getElementById("parentView");v.classList.toggle("hidden",!s);
  if(!s){if(code)sessionStorage.removeItem("parentCode");return;}
@@ -1899,7 +1922,7 @@ function renderParent(){
   const avg=shown.length?Math.round(shown.reduce((t,a)=>t+getAttemptScore(a)/(a.total||1)*100,0)/shown.length):0;
   return `<div class="panel"><div class="row"><h3>👦 ${esc(child.name)}</h3><span class="tag">${esc(child.grade)}</span></div><p class="muted">${isBanned(child)?banText(child):"حساب الطالب نشط"}</p><div class="grid"><div class="card">عدد الامتحانات<div class="stat">${at.length}</div></div><div class="card">متوسط المستوى<div class="stat">${avg}%</div></div></div><h4>📚 واجبات الطالب</h4>${homeworksForStudent(child.id).map(renderHomeworkCard).join("")||"<p>لا توجد واجبات مرسلة حتى الآن.</p>"}<h4>سجل الامتحانات</h4>${at.map(a=>`<div class="exam"><b>${esc(a.title)}</b><p>${a.visible?"الدرجة: "+getAttemptScore(a)+"/"+a.total:"النتيجة قيد المراجعة"}</p><p class="small">${new Date(a.submittedAt).toLocaleString("ar-EG")}</p></div>`).join("")||"<p>لم يؤد الطالب أي امتحان بعد.</p>"}</div>`;
  }).join("");
- v.innerHTML=`<div class="row"><h3>👪 حساب ولي الأمر</h3><button class="danger" onclick="parentLogout()">خروج</button></div><p class="notice">يمكنك متابعة ${children.length} من الأبناء المسجلين بنفس رقم هاتف ولي الأمر. لكل ابن حسابه ونتائجه وواجباته بشكل مستقل.</p>${cards}<div class="panel"><h3>＋ إضافة ابن جديد</h3><p class="muted">أدخل بيانات الابن بالطريقة المعتادة. سيتم ربطه تلقائيًا بنفس رقم هاتف ولي الأمر، ولن تتغير حسابات الأبناء الحاليين.</p><label>اسم الابن الثلاثي</label><input id="parentNewChildName" placeholder="الاسم الثلاثي"><label>الصف الدراسي</label><select id="parentNewChildGrade">${GRADES.map(g=>`<option>${g}</option>`).join("")}</select><label>كلمة مرور حساب الابن</label><input id="parentNewChildPass" type="password" minlength="4" placeholder="4 أحرف على الأقل"><button class="primary" onclick="addParentChild()">إضافة الابن</button><p id="parentChildError" class="small"></p></div>`;
+ v.innerHTML=`<div class="row"><h3>👪 حساب ولي الأمر</h3><button class="danger" onclick="parentLogout()">خروج</button></div><p class="notice">يمكنك متابعة ${children.length} من الأبناء المرتبطين بكود ولي الأمر هذا. لا تظهر هنا حسابات الطلاب الآخرين حتى لو تشابهت أرقام هواتفهم.</p>${cards}<div class="panel"><h3>＋ إضافة ابن جديد</h3><p class="muted">أدخل بيانات الابن بالطريقة المعتادة. سيتم ربطه تلقائيًا بكود ولي الأمر الحالي، مع بقاء حسابات الأبناء ونتائجهم كما هي.</p><label>اسم الابن الثلاثي</label><input id="parentNewChildName" placeholder="الاسم الثلاثي"><label>الصف الدراسي</label><select id="parentNewChildGrade">${GRADES.map(g=>`<option>${g}</option>`).join("")}</select><label>كلمة مرور حساب الابن</label><input id="parentNewChildPass" type="password" minlength="4" placeholder="4 أحرف على الأقل"><button class="primary" onclick="addParentChild()">إضافة الابن</button><p id="parentChildError" class="small"></p></div>`;
 }
 
 /* ===== طرد تلقائي عند الحذف أو الحظر ===== */
