@@ -808,6 +808,7 @@ main{min-width:0}
 <div class="side-separator"></div>
 <button class="side-link" onclick="menuGo('parent')"><svg viewBox="0 0 24 24"><circle cx="8" cy="8" r="3"/><circle cx="17" cy="9" r="3"/><path d="M2 21v-2a6 6 0 0 1 12 0v2m0-5a5 5 0 0 1 9 3v2"/></svg><span>وضع ولي الأمر</span></button>
 <button class="side-link" onclick="menuGo('certificates')"><svg viewBox="0 0 24 24"><circle cx="12" cy="9" r="6"/><path d="m8 14-1 8 5-3 5 3-1-8"/></svg><span>الشهادات</span></button>
+<button id="installAppBtn" class="side-link" onclick="installPlatform()"><svg viewBox="0 0 24 24"><path d="M12 3v12m0 0-4-4m4 4 4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg><span>تحميل المنصة</span></button>
 <button class="side-link theme-side" onclick="toggleDarkMode()"><svg viewBox="0 0 24 24"><path d="M20 15A8 8 0 0 1 9 4a8 8 0 1 0 11 11z"/></svg><span>الوضع الليلي</span><span class="toggle-track"></span></button>
 <div class="side-goodluck">Good Luck!</div>
 </aside>
@@ -2445,9 +2446,68 @@ initializeSync();
 })();
 </script>
 <script>
+/* ===== تحميل المنصة على الهاتف (PWA) ===== */
+(function(){
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js');
+    navigator.serviceWorker.register('sw.js').catch(function(){});
   }
+  var deferredPrompt = null;
+  var isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+  var isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+  window.addEventListener('beforeinstallprompt', function(e){
+    e.preventDefault();
+    deferredPrompt = e;
+  });
+  window.addEventListener('appinstalled', function(){
+    deferredPrompt = null;
+    var b = document.getElementById('installAppBtn');
+    if (b) b.style.display = 'none';
+    showInstallBox('تم تثبيت المنصة', 'تم تثبيت المنصة على هاتفك بنجاح. ستجد أيقونتها في الشاشة الرئيسية.');
+  });
+  document.addEventListener('DOMContentLoaded', function(){
+    var b = document.getElementById('installAppBtn');
+    if (b && isStandalone) b.style.display = 'none';
+  });
+
+  function showInstallBox(title, html){
+    var old = document.getElementById('installBox');
+    if (old) old.remove();
+    var box = document.createElement('div');
+    box.id = 'installBox';
+    box.setAttribute('dir','rtl');
+    box.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(5,15,40,.6);display:flex;align-items:center;justify-content:center;padding:18px;font-family:inherit';
+    box.innerHTML =
+      '<div style="background:#fff;color:#18213b;border-radius:22px;max-width:380px;width:100%;padding:22px;text-align:right;box-shadow:0 20px 60px #0006">' +
+      '<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px"><img src="icons/icon-192.png" alt="" style="width:52px;height:52px;border-radius:14px"><b style="font-size:19px">' + title + '</b></div>' +
+      '<div style="font-size:16px;line-height:1.9">' + html + '</div>' +
+      '<button type="button" id="installBoxClose" style="margin-top:16px;width:100%;border:0;border-radius:14px;padding:13px;font-size:17px;font-weight:800;background:linear-gradient(110deg,#3d91ff,#0848d2);color:#fff;cursor:pointer">حسنًا</button></div>';
+    document.body.appendChild(box);
+    function close(){ box.remove(); }
+    box.addEventListener('click', function(e){ if (e.target === box) close(); });
+    document.getElementById('installBoxClose').onclick = close;
+  }
+
+  window.installPlatform = function(){
+    if (typeof closeSideMenu === 'function') { try { closeSideMenu(); } catch(e){} }
+    if (isStandalone) {
+      showInstallBox('المنصة مثبتة', 'أنت تستخدم المنصة من التطبيق المثبت بالفعل.');
+      return;
+    }
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      deferredPrompt.userChoice.then(function(){ deferredPrompt = null; });
+      return;
+    }
+    if (isIOS) {
+      showInstallBox('تحميل المنصة على الآيفون',
+        '١) افتح الموقع من متصفح <b>Safari</b>.<br>٢) اضغط زر المشاركة <b>⬆︎</b> أسفل الشاشة.<br>٣) اختر <b>إضافة إلى الشاشة الرئيسية</b>.<br>٤) اضغط <b>إضافة</b>.');
+    } else {
+      showInstallBox('تحميل المنصة',
+        'افتح الموقع من متصفح <b>Chrome</b> ثم اضغط على القائمة <b>⋮</b> في أعلى المتصفح واختر <b>تثبيت التطبيق</b> أو <b>إضافة إلى الشاشة الرئيسية</b>.');
+    }
+  };
+})();
 </script>
 </body>
 </html>
