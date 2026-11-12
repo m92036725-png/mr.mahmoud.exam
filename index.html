@@ -1912,8 +1912,8 @@ setSyncStatus("انقطع الاتصال");
 const HW_MAX_IMAGES=100;            // أقصى عدد صور للواجب الواحد
 const HW_MAX_SIDE=1280;             // أكبر بُعد للصورة بعد الضغط (بكسل)
 const HW_QUALITY=0.62;              // جودة JPEG
-const HW_CHUNK_CHARS=700000;        // حجم الدفعة الواحدة المرفوعة للسحابة
-const HW_CHUNK_MAX_IMAGES=8;
+const HW_CHUNK_CHARS=250000;        // حجم الدفعة الواحدة المرفوعة للسحابة
+const HW_CHUNK_MAX_IMAGES=3;
 let hwDraft=[],hwBusy=false;        // hwDraft: [{full,thumb}]
 const HW_CHUNK_CACHE={};            // chunkId -> [dataUrl,...]
 const HW_CHUNK_LOADING={};          // chunkId -> Promise
@@ -2022,7 +2022,9 @@ async function hwUploadChunk(id,images){
   try{
    const r=await fetch(SYNC_URL+"?on_conflict=id",{method:"POST",headers:syncHeaders({"Content-Type":"application/json","Prefer":"resolution=merge-duplicates,return=minimal"}),body:JSON.stringify({id,data:{images},updated_at:new Date().toISOString()})});
    if(r.ok)return;
-   last=new Error("HTTP "+r.status);
+   let t="";try{t=(await r.text()).slice(0,300);}catch(e){}
+   last=new Error("HTTP "+r.status+" "+t);last.status=r.status;
+   if(r.status>=400&&r.status<500&&r.status!==408&&r.status!==429)break;   // خطأ دائم: لا فائدة من التكرار
   }catch(e){last=e;}
   await hwSleep(900*(a+1));
  }
@@ -2069,7 +2071,8 @@ async function submitHomework(){
   console.error(e);
   hwSetStatus("",null);
   fb.textContent="";
-  alert("تعذر رفع الصور. تأكد من اتصال الإنترنت ثم اضغط إرسال مرة أخرى (صورك ما زالت محفوظة هنا).");
+  const why=String(e&&e.message||e);const perm=/HTTP (401|403)|row-level|policy|permission/i.test(why);
+  alert((perm?"السيرفر رفض حفظ الصور (صلاحيات قاعدة البيانات).":"تعذر رفع الصور.")+"\n\nتفاصيل الخطأ: "+why+"\n\nصورك ما زالت محفوظة هنا، يمكنك المحاولة مرة أخرى.");
  }finally{hwBusy=false;hwRenderDraft();renderStudentHomeworks("homeworkStudentList");}
 }
 
