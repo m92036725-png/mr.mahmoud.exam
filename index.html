@@ -982,7 +982,7 @@ body.dark .home-student-summary .student-home-name{color:#91b8ff}
 <h2>?? ملفي الشخصي</h2>
 <div id="profileDetails"></div><hr>
 <h3>?? سجل الامتحانات والدرجات</h3>
-<div id="profileHistory"></div>
+<div id="profileHistory"></div><hr><h3>?? الواجبات</h3><div id="profileHomeworks"></div>
 </div>
 </div>
 <div id="studentExamArea">
@@ -999,7 +999,8 @@ body.dark .home-student-summary .student-home-name{color:#91b8ff}
 <p class="notice">ارفع صور صفحات الواجب بوضوح، ويمكنك اختيار أكثر من صورة في المرة الواحدة.</p>
 <label>صور صفحات الواجب</label>
 <input id="homeworkImages" type="file" accept="image/*" multiple onchange="previewHomeworkImages()">
-<div id="homeworkPreview" class="grid"></div>
+<div id="homeworkPreview" class="grid"></div><div id="homeworkStudentList"></div>
+<label>ملاحظات للمدرس (اختياري)</label><textarea id="homeworkNote" placeholder="اكتب أي ملاحظة تريد إرسالها للمدرس..."></textarea>
 <button class="primary" onclick="submitHomework()">إرسال الواجب للمدرس</button><p id="homeworkFeedback"></p>
 </div>
 <div id="homeworkLoginNotice" class="notice hidden">سجل دخولك بحساب الطالب أولاً حتى تتمكن من إرسال الواجب.</div>
@@ -1182,7 +1183,6 @@ went"></textarea>
 <span id="syncStatus">جاري الاتصال بالمزامنة...</span>
 </footer>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js"></script>
 <script>
 const TEACHER_PASSWORD="mahmoudkhater1983";
 const KEY="mahmoud_khater_platform_v2";
@@ -1360,7 +1360,7 @@ let reviewBlock=canReview?`<button class="secondary" onclick="toggleStudentRevie
 let pendingReview=!a.reviewed?'<p class="small">ستظهر مراجعة الإجابات بعد انتهاء تصحيح جميع الأسئلة.</p>':"";
 return `<div class="exam"><b>${esc(a.title)}</b><p>${a.visible?"الدرجة: "+getAttemptScore(a)+"/"+a.total:"النتيجة قيد المراجعة"}</p>${status}${reviewBlock}${pendingReview}${requestButton}</div>`;
 }).join("")||"<p>لا توجد نتائج.</p>";
-
+if(!document.getElementById("studentProfile").classList.contains("hidden"))renderStudentHomeworks("profileHomeworks");
 }
 
 function studentAttemptReviewHtml(attempt){
@@ -1418,7 +1418,7 @@ let s=data.student;if(!s)return;
 document.getElementById("profileDetails").innerHTML=`<p><b>الاسم:</b> ${esc(s.name)}</p><p><b>رقم ولي الأمر:</b> ${esc(s.phone)}</p><p><b>الصف الدراسي:</b> ${esc(s.grade)}</p><p><b>المجموعة:</b> ${esc(groupName(s.groupId))}</p><label for="profileGroupSelect">اختيار / تغيير المجموعة</label><select id="profileGroupSelect">${'<option value="">بدون مجموعة</option>'+(data.groups||[]).map(g=>`<option value="${esc(g.id)}" ${s.groupId===g.id?"selected":""}>${esc(g.name)}</option>`).join("")}</select><button class="secondary" onclick="updateStudentGroup(document.getElementById('profileGroupSelect').value)">حفظ المجموعة</button><p><b>?? كود ولي الأمر:</b> ${esc(s.parentCode||"-")}</p><p><b>تاريخ التسجيل:</b> ${new Date(s.createdAt).toLocaleDateString("ar-EG")}</p><p><b>عدد الامتحانات:</b> ${data.attempts.filter(a=>a.studentId===s.id).length}</p>`;
 let history=data.attempts.filter(a=>a.studentId===s.id);
 document.getElementById("profileHistory").innerHTML=history.length?history.map(a=>`<div class="exam"><h3>${esc(a.title)}</h3><p>الدرجة: ${a.visible?getAttemptScore(a)+"/"+a.total:"قيد المراجعة"}</p><p>تاريخ الامتحان: ${new Date(a.submittedAt).toLocaleString("ar-EG")}</p><span class="tag">تم التسليم</span></div>`).join(""):"<p>لم تؤد أي امتحان حتى الآن.</p>";
-
+renderStudentHomeworks("profileHomeworks");
 }
 function hideProfile(){
 document.getElementById("studentProfile").classList.add("hidden");
@@ -2349,245 +2349,82 @@ function renderHomeStudentSummary(){
 }
 function renderHomeworkMode(){
  const logged=!!data.student;
- const area=document.getElementById("homeworkStudentArea");
- const notice=document.getElementById("homeworkLoginNotice");
- if(area)area.classList.toggle("hidden",!logged);
- if(notice)notice.classList.toggle("hidden",logged);
- if(logged){
-  const feedback=document.getElementById("homeworkFeedback");
-  if(feedback)feedback.textContent="";
- }
+ document.getElementById("homeworkStudentArea").classList.toggle("hidden",!logged);
+ document.getElementById("homeworkLoginNotice").classList.toggle("hidden",logged);
+ if(logged){document.getElementById("homeworkFeedback").textContent="";renderStudentHomeworks("homeworkStudentList");}
 }
+function previewHomeworkImages(){
+ const input=document.getElementById("homeworkImages"), files=[...(input.files||[])];
 
-/* تجهيز الصور محلياً فقط؛ الصور لا تُحفظ داخل بيانات المزامنة */
-function prepareHomeworkImage(file){
- return new Promise((resolve,reject)=>{
+ homeworkDraftImages=[];homeworkImagesLoading=files.length;
+ const box=document.getElementById("homeworkPreview");box.innerHTML="";
+ files.forEach((file,index)=>{
+  if(!file.type.startsWith("image/"))return;
   const reader=new FileReader();
-  reader.onerror=()=>reject(new Error("read"));
   reader.onload=()=>{
-   const img=new Image();
-   img.onerror=()=>reject(new Error("image"));
-   img.onload=()=>{
-    try{
-     const scale=Math.min(1,1600/Math.max(img.width,img.height));
-     const canvas=document.createElement("canvas");
-     canvas.width=Math.max(1,Math.round(img.width*scale));
-     canvas.height=Math.max(1,Math.round(img.height*scale));
-     const ctx=canvas.getContext("2d");
-     if(!ctx)throw new Error("canvas");
-     ctx.fillStyle="#ffffff";
-     ctx.fillRect(0,0,canvas.width,canvas.height);
-     ctx.drawImage(img,0,0,canvas.width,canvas.height);
-     resolve(canvas.toDataURL("image/jpeg",0.72));
-    }catch(e){reject(e);}
-   };
-   img.src=reader.result;
-  };
-  reader.readAsDataURL(file);
+   const img=new Image();img.onload=()=>{
+    const scale=Math.min(1,1200/Math.max(img.width,img.height));
+    const canvas=document.createElement("canvas");canvas.width=Math.round(img.width*scale);canvas.height=Math.round(img.height*scale);
+    canvas.getContext("2d").drawImage(img,0,0,canvas.width,canvas.height);
+    const dataUrl=canvas.toDataURL("image/jpeg",0.62);
+    homeworkDraftImages[index]=dataUrl;homeworkImagesLoading=Math.max(0,homeworkImagesLoading-1);
+    const card=document.createElement("div");card.className="card";
+    card.innerHTML=`<img src="${dataUrl}" alt="صورة الواجب ${index+1}" style="width:100%;height:180px;object-fit:contain;border-radius:10px"><p>صفحة ${index+1}</p>`;box.appendChild(card);
+   };img.src=reader.result;
+  };reader.readAsDataURL(file);
  });
-}
-function renderHomeworkPreview(){
- const box=document.getElementById("homeworkPreview");if(!box)return;
- box.innerHTML=homeworkDraftImages.map((src,i)=>
-  `<div class="card"><img src="${src}" alt="صورة الواجب ${i+1}" style="width:100%;height:180px;object-fit:contain;border-radius:10px"><p>صفحة ${i+1}</p><button type="button" class="danger" onclick="removeHomeworkImage(${i})">حذف الصورة</button></div>`
- ).join("");
-}
-function removeHomeworkImage(index){
- homeworkDraftImages.splice(index,1);
- renderHomeworkPreview();
-}
-async function previewHomeworkImages(){
- const input=document.getElementById("homeworkImages");
- const feedback=document.getElementById("homeworkFeedback");
- const files=[...(input?.files||[])].filter(file=>file.type&&file.type.startsWith("image/"));
- if(!files.length){
-  homeworkDraftImages=[];
-  homeworkImagesLoading=0;
-  renderHomeworkPreview();
-  return;
- }
- homeworkDraftImages=[];
- homeworkImagesLoading=files.length;
- renderHomeworkPreview();
- if(feedback)feedback.textContent="جاري تجهيز الصور...";
- const prepared=await Promise.all(files.map(file=>prepareHomeworkImage(file).catch(()=>null)));
- homeworkDraftImages=prepared.filter(Boolean);
- homeworkImagesLoading=0;
- renderHomeworkPreview();
- if(feedback){
-  feedback.textContent=homeworkDraftImages.length
-   ? "تم تجهيز الصور. اضغط إرسال الواجب."
-   : "لم نتمكن من تجهيز الصور. اختر الصور مرة أخرى من فضلك.";
- }
-}
-
-async function makeHomeworkPdf(images){
- if(!window.jspdf||!window.jspdf.jsPDF)throw new Error("pdf-library");
- const {jsPDF}=window.jspdf;
- const pdf=new jsPDF({orientation:"p",unit:"pt",format:"a4",compress:true});
- const pageW=pdf.internal.pageSize.getWidth();
- const pageH=pdf.internal.pageSize.getHeight();
- for(let i=0;i<images.length;i++){
-  if(i)pdf.addPage("a4","p");
-  const img=new Image();
-  await new Promise((resolve,reject)=>{
-   img.onload=resolve;
-   img.onerror=()=>reject(new Error("image"));
-   img.src=images[i];
-  });
-  const ratio=Math.min(pageW/img.width,pageH/img.height);
-  const w=img.width*ratio,h=img.height*ratio;
-  pdf.addImage(images[i],"JPEG",(pageW-w)/2,(pageH-h)/2,w,h,undefined,"FAST");
- }
- return pdf.output("blob");
-}
-async function uploadHomeworkPdf(blob,homeworkId){
- const path="submissions/"+homeworkId+".pdf";
- const response=await fetch(SUPABASE_URL+"/storage/v1/object/homework-files/"+path,{
-  method:"POST",
-  headers:syncHeaders({"Content-Type":"application/pdf","x-upsert":"false"}),
-  body:blob
- });
- if(!response.ok)throw new Error("upload");
- return path;
 }
 async function submitHomework(){
- const s=data.student;
- const feedback=document.getElementById("homeworkFeedback");
- const input=document.getElementById("homeworkImages");
- const btn=document.querySelector("#homeworkStudentArea button.primary");
- if(!s)return;
- if(homeworkImagesLoading>0){
-  if(feedback)feedback.textContent="انتظر لحظة حتى يكتمل تجهيز الصور.";
-  return;
- }
- const images=homeworkDraftImages.slice();
- if(!images.length){
-  if(feedback)feedback.textContent="اختر صور الواجب أولاً.";
-  return;
- }
- if(btn)btn.disabled=true;
- if(feedback)feedback.textContent="جاري إرسال الواجب...";
- const itemId="hw_"+Date.now()+"_"+Math.random().toString(36).slice(2,9);
+ const s=data.student;if(!s){alert("سجل دخولك كطالب أولاً.");return;}
+ const note=document.getElementById("homeworkNote").value.trim();
+ if(homeworkImagesLoading>0){alert("انتظر حتى يكتمل تجهيز الصور قبل إرسال الواجب.");return;}
+ const images=homeworkDraftImages.filter(Boolean);
+ const totalImageSize=images.reduce((sum,x)=>sum+x.length,0);
+
+ if(!images.length){alert("اختر صورة واحدة على الأقل للواجب.");return;}
+ const btn=document.querySelector('#homeworkStudentArea button.primary');if(btn)btn.disabled=true;
  try{
-  const pdfBlob=await makeHomeworkPdf(images);
-  const pdfPath=await uploadHomeworkPdf(pdfBlob,itemId);
-  const item={
-   id:itemId,studentId:s.id,studentName:s.name,grade:s.grade,
-   groupId:s.groupId||"",
-   groupName:(data.groups||[]).find(g=>g.id===s.groupId)?.name||s.groupName||"",
-   pdfPath,pageCount:images.length,status:"pending",
-   createdAt:Date.now(),reviewedAt:null,teacherNote:""
-  };
+  const item={id:"hw_"+Date.now()+"_"+Math.random().toString(36).slice(2,7),studentId:s.id,studentName:s.name,grade:s.grade,groupId:s.groupId||"",groupName:(data.groups||[]).find(g=>g.id===s.groupId)?.name||s.groupName||"",images,note,status:"pending",createdAt:Date.now(),reviewedAt:null,teacherNote:""};
   if(!Array.isArray(data.homeworks))data.homeworks=[];
-  data.homeworks.unshift(item);
-  save();
-  homeworkDraftImages=[];
-  homeworkImagesLoading=0;
-  if(input)input.value="";
-  renderHomeworkPreview();
-  if(feedback)feedback.textContent="تم استلام الواجب وإرساله للمدرس بنجاح.";
- }catch(e){
-  console.error("Homework upload failed:",e);
-  if(feedback)feedback.textContent="لم نتمكن من استلام الواجب الآن. صورك ما زالت موجودة، حاول الإرسال مرة أخرى.";
- }finally{
-  if(btn)btn.disabled=false;
- }
+  data.homeworks.unshift(item);save();
+  document.getElementById("homeworkFeedback").textContent="تم إرسال الواجب للمدرس بنجاح ?";
+  document.getElementById("homeworkImages").value="";document.getElementById("homeworkNote").value="";document.getElementById("homeworkPreview").innerHTML="";homeworkDraftImages=[];homeworkImagesLoading=0;
+  renderStudentHomeworks("homeworkStudentList");
+ }catch(e){console.error(e);alert("تعذر إرسال الواجب. حاول تقليل عدد الصور أو حجمها.");}
+ finally{if(btn)btn.disabled=false;}
 }
-function homeworksForStudent(studentId){
- return (data.homeworks||[]).filter(h=>h.studentId===studentId).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
-}
-function homeworkStatus(h){
- return h.status==="correct"?"الواجب صحيح":h.status==="errors"?"الواجب يحتاج إلى تعديل":"في انتظار مراجعة المدرس";
-}
-function renderHomeworkCard(h){
- const fileAction=h.pdfPath
-  ? `<button type="button" class="secondary" onclick="openHomeworkPdf('${esc(h.id)}')">فتح صور الواجب (${Number(h.pageCount)||1} صفحة)</button>`
-  : homeworkImagesHtml(h);
- return `<div class="exam"><div class="row"><b>واجب بتاريخ ${new Date(h.createdAt||Date.now()).toLocaleString("ar-EG")}</b><span class="tag">${homeworkStatus(h)}</span></div>${fileAction}${h.teacherNote?`<p><b>رد المدرس:</b> ${esc(h.teacherNote)}</p>`:""}</div>`;
-}
+function homeworksForStudent(studentId){return (data.homeworks||[]).filter(h=>h.studentId===studentId).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));}
+function homeworkStatus(h){return h.status==="correct"?"الواجب صحيح ?":h.status==="errors"?"الواجب به أخطاء":"في انتظار مراجعة المدرس";}
 function homeworkImagesHtml(h){
  const images=h.images||[],key=String(h.id||"").replace(/[^a-zA-Z0-9_-]/g,"");
  return `<div class="homework-thumbs">${images.slice(0,2).map((src,i)=>`<button type="button" class="homework-thumb" onclick="openHomeworkImage('${key}',${i})"><img src="${src}" alt="صورة الواجب ${i+1}"></button>`).join("")}</div>${images.length>2?`<button type="button" class="secondary homework-more" onclick="toggleHomeworkMore('${key}')">إظهار المزيد (${images.length-2})</button><div id="hwMore_${key}" class="homework-thumbs hidden">${images.slice(2).map((src,i)=>`<button type="button" class="homework-thumb" onclick="openHomeworkImage('${key}',${i+2})"><img src="${src}" alt="صورة الواجب ${i+3}"></button>`).join("")}</div>`:""}`;
 }
-function toggleHomeworkMore(key){
- const el=document.getElementById("hwMore_"+key);if(el)el.classList.toggle("hidden");
-}
+function toggleHomeworkMore(key){const el=document.getElementById("hwMore_"+key);if(el)el.classList.toggle("hidden");}
 function openHomeworkImage(key,index){
- const h=(data.homeworks||[]).find(x=>String(x.id||"").replace(/[^a-zA-Z0-9_-]/g,"")===key);
- if(!h||!h.images?.[index])return;
+ const h=(data.homeworks||[]).find(x=>String(x.id||"").replace(/[^a-zA-Z0-9_-]/g,"")===key);if(!h||!h.images?.[index])return;
  let box=document.getElementById("homeworkLightbox");
- if(!box){
-  box=document.createElement("div");box.id="homeworkLightbox";box.className="homework-lightbox";
-  box.innerHTML=`<button type="button" class="homework-lightbox-close" onclick="document.getElementById('homeworkLightbox').classList.remove('open')">×</button><img alt="فحص صورة الواجب">`;
-  document.body.appendChild(box);
-  box.addEventListener("click",e=>{if(e.target===box)box.classList.remove("open");});
- }
+ if(!box){box=document.createElement("div");box.id="homeworkLightbox";box.className="homework-lightbox";box.innerHTML=`<button type="button" class="homework-lightbox-close" onclick="document.getElementById('homeworkLightbox').classList.remove('open')">×</button><img alt="فحص صورة الواجب">`;document.body.appendChild(box);box.addEventListener("click",e=>{if(e.target===box)box.classList.remove("open");});}
  box.querySelector("img").src=h.images[index];box.classList.add("open");
 }
-async function openHomeworkPdf(id){
- const h=(data.homeworks||[]).find(x=>x.id===id);if(!h||!h.pdfPath)return;
- try{
-  const response=await fetch(SUPABASE_URL+"/storage/v1/object/sign/homework-files/"+h.pdfPath,{
-   method:"POST",headers:syncHeaders({"Content-Type":"application/json"}),
-   body:JSON.stringify({expiresIn:3600})
-  });
-  if(!response.ok)throw new Error("open");
-  const result=await response.json();
-  const signed=result.signedURL||result.signedUrl;
-  if(!signed)throw new Error("url");
-  const url=SUPABASE_URL+"/storage/v1"+signed;
-  let box=document.getElementById("homeworkPdfViewer");
-  if(!box){
-   box=document.createElement("div");box.id="homeworkPdfViewer";
-   box.style.cssText="position:fixed;inset:0;z-index:100200;background:#071326ee;display:none;padding:54px 10px 10px";
-   box.innerHTML=`<button type="button" style="position:absolute;top:8px;right:12px;z-index:2;background:white;color:#102b60;font-size:25px" onclick="document.getElementById('homeworkPdfViewer').style.display='none'">إغلاق ×</button><iframe title="ملف الواجب PDF" style="width:100%;height:100%;border:0;border-radius:10px;background:white"></iframe>`;
-   document.body.appendChild(box);
-  }
-  box.querySelector("iframe").src=url+"#toolbar=1&navpanes=1&zoom=page-width";
-  box.style.display="block";
- }catch(e){
-  console.error("Homework PDF open failed:",e);
-  alert("تعذر فتح ملف الواجب حالياً. حاول مرة أخرى.");
- }
-}
 function renderStudentHomeworks(targetId){
- const box=document.getElementById(targetId);if(box)box.innerHTML="";
+ const box=document.getElementById(targetId);if(!box)return;
+ const s=data.student;if(!s){box.innerHTML="";return;}
+ const list=homeworksForStudent(s.id);
+ box.innerHTML=list.map(renderHomeworkCard).join("")||"<p>لم ترسل أي واجب حتى الآن.</p>";
 }
 function renderTeacherHomeworks(){
  const box=document.getElementById("teacherHomeworks");if(!box)return;
- const list=(data.homeworks||[]).filter(h=>h.status==="pending"&&!h.teacherArchived)
-  .slice().sort((a,b)=>String(a.grade||"").localeCompare(String(b.grade||""))||
-   String(a.groupName||a.groupId||"").localeCompare(String(b.groupName||b.groupId||""))||
-   (b.createdAt||0)-(a.createdAt||0));
- const groups={};
- list.forEach(h=>{
-  const key=(h.grade||"غير محدد")+" — "+(h.groupName||groupName(h.groupId)||"بدون مجموعة");
-  (groups[key]||(groups[key]=[])).push(h);
- });
- box.innerHTML=Object.keys(groups).map(key=>
-  `<section class="homework-group"><h3>${esc(key)} <span class="tag">${groups[key].length} واجب</span></h3>`+
-  groups[key].map(h=>
-   `<div class="exam"><div class="row"><h3>${esc(h.studentName||"طالب")}</h3><span class="tag">${esc(h.grade||"")}</span></div>`+
-   `<p>تاريخ الإرسال: ${new Date(h.createdAt||Date.now()).toLocaleString("ar-EG")}</p>`+
-   (h.pdfPath?`<p><button type="button" class="secondary" onclick="openHomeworkPdf('${esc(h.id)}')">فتح صور الواجب (${Number(h.pageCount)||1} صفحة)</button></p>`:homeworkImagesHtml(h))+
-   `<p><b>الحالة الحالية:</b> ${homeworkStatus(h)}</p><label>حالة الواجب</label>`+
-   `<select id="hwStatus_${esc(h.id)}"><option value="correct">الواجب صحيح</option><option value="errors">الواجب به أخطاء ويحتاج تعديل</option></select>`+
-   `<label>ملاحظات / تصحيح المدرس</label><textarea id="hwNote_${esc(h.id)}" placeholder="اكتب ملاحظاتك على الواجب...">${esc(h.teacherNote||"")}</textarea>`+
-   `<button class="primary" onclick="reviewHomework('${esc(h.id)}')">حفظ وإرسال التصحيح</button></div>`
-  ).join("")+"</section>"
- ).join("")||'<div class="notice">لا توجد واجبات جديدة حالياً.</div>';
+ const list=(data.homeworks||[]).filter(h=>h.status==="pending"&&!h.teacherArchived).slice().sort((a,b)=>String(a.grade||"").localeCompare(String(b.grade||""))||String(a.groupName||a.groupId||"").localeCompare(String(b.groupName||b.groupId||""))||(b.createdAt||0)-(a.createdAt||0));
+ const groups={};list.forEach(h=>{const key=(h.grade||"غير محدد")+" — "+(h.groupName||groupName(h.groupId)||"بدون مجموعة");(groups[key]||(groups[key]=[])).push(h);});
+ box.innerHTML=Object.keys(groups).map(key=>`<section class="homework-group"><h3>${esc(key)} <span class="tag">${groups[key].length} واجب</span></h3>${groups[key].map(h=>`<div class="exam"><div class="row"><h3>${esc(h.studentName||"طالب")}</h3><span class="tag">${esc(h.grade||"")}</span></div><p>تاريخ الإرسال: ${new Date(h.createdAt||Date.now()).toLocaleString("ar-EG")}</p>${h.note?`<p><b>ملاحظة الطالب:</b> ${esc(h.note)}</p>`:""}${homeworkImagesHtml(h)}<p><b>الحالة الحالية:</b> ${homeworkStatus(h)}</p><label>حالة الواجب</label><select id="hwStatus_${h.id}"><option value="correct">تم التصحيح</option><option value="errors">يحتاج إلى تعديل</option></select><label>ملاحظات / تصحيح المدرس</label><textarea id="hwNote_${h.id}" placeholder="اكتب ملاحظاتك على الواجب...">${esc(h.teacherNote||"")}</textarea><button class="primary" onclick="reviewHomework('${h.id}')">حفظ وإرسال التصحيح</button></div>`).join("")}</section>`).join("")||'<div class="notice">لا توجد واجبات جديدة حالياً.</div>';
 }
 function reviewHomework(id){
  const h=(data.homeworks||[]).find(x=>x.id===id);if(!h)return;
  const status=document.getElementById("hwStatus_"+id)?.value;
  const note=document.getElementById("hwNote_"+id)?.value.trim()||"";
  if(status==="errors"&&!note){alert("اكتب الأخطاء التي وجدتها في الواجب قبل الإرسال.");return;}
- h.status=status;
- h.teacherNote=status==="correct"?(note||"الواجب صحيح، أحسنت!"):note;
- h.reviewedAt=Date.now();h.teacherArchived=true;
- save();renderTeacherHomeworks();
- alert("تم إرسال تصحيح الواجب بنجاح.");
+ h.status=status;h.teacherNote=status==="correct"?(note||"الواجب صحيح، أحسنت!"):note;h.reviewedAt=Date.now();h.teacherArchived=true;
+ save();renderTeacherHomeworks();alert("تم إرسال تصحيح الواجب بنجاح، وسيظهر للطالب وولي الأمر.");
 }
 /* ================= نهاية نظام الواجبات ================= */
 
@@ -2650,7 +2487,7 @@ function renderParent(){
  const cards=children.map(child=>{
   const at=data.attempts.filter(a=>a.studentId===child.id),shown=at.filter(a=>a.visible);
   const avg=shown.length?Math.round(shown.reduce((t,a)=>t+getAttemptScore(a)/(a.total||1)*100,0)/shown.length):0;
-  return `<div class="panel"><div class="row"><h3>?? ${esc(child.name)}</h3><span class="tag">${esc(child.grade)}</span></div><p class="muted">${isBanned(child)?banText(child):"حساب الطالب نشط"}</p><div class="grid"><div class="card">عدد الامتحانات<div class="stat">${at.length}</div></div><div class="card">متوسط المستوى<div class="stat">${avg}%</div></div></div><h4>سجل الامتحانات</h4>${at.map(a=>`<div class="exam"><b>${esc(a.title)}</b><p>${a.visible?"الدرجة: "+getAttemptScore(a)+"/"+a.total:"النتيجة قيد المراجعة"}</p><p class="small">${new Date(a.submittedAt).toLocaleString("ar-EG")}</p></div>`).join("")||"<p>لم يؤد الطالب أي امتحان بعد.</p>"}</div>`;
+  return `<div class="panel"><div class="row"><h3>?? ${esc(child.name)}</h3><span class="tag">${esc(child.grade)}</span></div><p class="muted">${isBanned(child)?banText(child):"حساب الطالب نشط"}</p><div class="grid"><div class="card">عدد الامتحانات<div class="stat">${at.length}</div></div><div class="card">متوسط المستوى<div class="stat">${avg}%</div></div></div><h4>?? واجبات الطالب</h4>${homeworksForStudent(child.id).map(renderHomeworkCard).join("")||"<p>لا توجد واجبات مرسلة حتى الآن.</p>"}<h4>سجل الامتحانات</h4>${at.map(a=>`<div class="exam"><b>${esc(a.title)}</b><p>${a.visible?"الدرجة: "+getAttemptScore(a)+"/"+a.total:"النتيجة قيد المراجعة"}</p><p class="small">${new Date(a.submittedAt).toLocaleString("ar-EG")}</p></div>`).join("")||"<p>لم يؤد الطالب أي امتحان بعد.</p>"}</div>`;
  }).join("");
  v.innerHTML=`<div class="row"><h3>?? حساب ولي الأمر</h3><button class="danger" onclick="parentLogout()">خروج</button></div><p class="notice">يمكنك متابعة ${children.length} من الأبناء المرتبطين بكود ولي الأمر هذا. لا تظهر هنا حسابات الطلاب الآخرين حتى لو تشابهت أرقام هواتفهم.</p>${cards}<div class="panel"><h3>+ إضافة ابن جديد</h3><p class="muted">أدخل بيانات الابن بالطريقة المعتادة. سيتم ربطه تلقائيًا بكود ولي الأمر الحالي، مع بقاء حسابات الأبناء ونتائجهم كما هي.</p><label>اسم الابن الثلاثي</label><input id="parentNewChildName" placeholder="الاسم الثلاثي"><label>الصف الدراسي</label><select id="parentNewChildGrade">${GRADES.map(g=>`<option>${g}</option>`).join("")}</select><label>كلمة مرور حساب الابن</label><input id="parentNewChildPass" type="password" minlength="4" placeholder="4 أحرف على الأقل"><button class="primary" onclick="addParentChild()">إضافة الابن</button><p id="parentChildError" class="small"></p></div>`;
 }
