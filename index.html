@@ -1721,9 +1721,7 @@ window.addEventListener("pagehide",function(){if(activeExam)submitExam(true);});
    المزامنة بين الأجهزة
 =========================== */
 
-const SUPABASE_URL="https://bxdxqepogfwzihoqviof.supabase.co";
-const SUPABASE_KEY="sb_publishable_iGRFVKWuMRKlfzj8BZDauQ_F0sY_5HJ";
-const SYNC_URL=SUPABASE_URL+"/rest/v1/platform_sync";
+const SYNC_URL="PASTE_YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL_HERE";
 
 let syncReady=false;
 let syncApplying=false;
@@ -1731,75 +1729,91 @@ let syncPending=false;
 let syncLastUpdated=null;
 let syncTimer=null;
 let syncPolling=false;
+let gasJsonpCounter=0;
 
-function syncHeaders(extra={}){
-return {
-apikey:SUPABASE_KEY,
-Authorization:"Bearer "+SUPABASE_KEY,
-...extra
-};
+function gasJsonp(action, params={}){
+ return new Promise((resolve,reject)=>{
+  const callback="__gasSyncCallback"+(++gasJsonpCounter);
+  const script=document.createElement("script");
+  const query=new URLSearchParams({action,callback,...params});
+  const timer=setTimeout(()=>finish(new Error("انتهت مهلة الاتصال بخدمة المزامنة")),20000);
+  function finish(error,value){
+   clearTimeout(timer);
+   try{delete window[callback];}catch(e){window[callback]=undefined;}
+   script.remove();
+   if(error)reject(error);else resolve(value);
+  }
+  window[callback]=(value)=>finish(null,value);
+  script.onerror=()=>finish(new Error("تعذر الاتصال بخدمة Google Apps Script"));
+  script.src=SYNC_URL+"?"+query.toString()+"&_="+Date.now();
+  document.head.appendChild(script);
+ });
+}
+
+async function gasPost(payload){
+ const response=await fetch(SYNC_URL,{
+  method:"POST",
+  mode:"no-cors",
+  redirect:"follow",
+  headers:{"Content-Type":"text/plain;charset=UTF-8"},
+  body:JSON.stringify(payload)
+ });
+ // no-cors deliberately returns an opaque response. Verify writes by reading
+ // the server back through JSONP instead of treating the opaque response as proof.
+ return response;
 }
 
 function syncSnapshot(){
-return {
-students:data.students||[],
-exams:data.exams||[],
-attempts:data.attempts||[],
-messages:data.messages||[],
-retakeRequests:data.retakeRequests||[],
-homeworks:data.homeworks||[],
-groups:data.groups||[]
-};
+ return {
+  students:data.students||[],
+  exams:data.exams||[],
+  attempts:data.attempts||[],
+  messages:data.messages||[],
+  retakeRequests:data.retakeRequests||[],
+  homeworks:data.homeworks||[],
+  groups:data.groups||[]
+ };
 }
 
 /* حفظ البيانات محلياً ثم إرسال نسخة للسحابة */
 function save(){
-localStorage.setItem(KEY,JSON.stringify(data));
-if(syncReady&&!syncApplying)queueCloudSave();
+ localStorage.setItem(KEY,JSON.stringify(data));
+ if(syncReady&&!syncApplying)queueCloudSave();
 }
 
 function queueCloudSave(){
-syncPending=true;
-clearTimeout(syncTimer);
-syncTimer=setTimeout(writeCloudData,700);
+ syncPending=true;
+ clearTimeout(syncTimer);
+ syncTimer=setTimeout(writeCloudData,700);
 }
 
 async function writeCloudData(){
-if(!syncReady)return;
-try{
-const now=new Date().toISOString();
-const response=await fetch(SYNC_URL+"?on_conflict=id",{
-method:"POST",
-headers:syncHeaders({
-"Content-Type":"application/json",
-"Prefer":"resolution=merge-duplicates,return=minimal"
-}),
-body:JSON.stringify({
-id:"main",
-data:syncSnapshot(),
-updated_at:now
-})
-});
-if(!response.ok)throw new Error("Save failed: "+response.status);
-syncLastUpdated=now;
-syncPending=false;
-setSyncStatus("المزامنة تعمل ✅");
-}catch(error){
-console.error(error);
-syncPending=false;
-setSyncStatus("تعذرت المزامنة - جاري إعادة المحاولة");
-setTimeout(()=>{if(syncReady)queueCloudSave();},5000);
-}
+ if(!syncReady)return;
+ const now=new Date().toISOString();
+ try{
+  await gasPost({action:"snapshot",data:syncSnapshot(),updated_at:now});
+  let confirmed=null;
+  for(let attempt=0;attempt<5;attempt++){
+   await new Promise(r=>setTimeout(r,700+attempt*500));
+   confirmed=await readCloudData();
+   if(confirmed&&confirmed.updated_at===now)break;
+  }
+  if(!confirmed||confirmed.updated_at!==now)throw new Error("لم يتم تأكيد حفظ البيانات على Google Sheets");
+  syncLastUpdated=confirmed.updated_at;
+  syncPending=false;
+  setSyncStatus("المزامنة تعمل ✅");
+ }catch(error){
+  console.error(error);
+  syncPending=false;
+  setSyncStatus("تعذرت المزامنة - جاري إعادة المحاولة");
+  setTimeout(()=>{if(syncReady)queueCloudSave();},5000);
+ }
 }
 
 async function readCloudData(){
-const response=await fetch(
-SYNC_URL+"?id=eq.main&select=data,updated_at",
-{headers:syncHeaders()}
-);
-if(!response.ok)throw new Error("Read failed: "+response.status);
-const rows=await response.json();
-return rows.length?rows[0]:null;
+ const result=await gasJsonp("snapshot");
+ if(!result||result.ok!==true)throw new Error(result&&result.error||"فشل قراءة بيانات المنصة");
+ return result.data?{data:result.data,updated_at:result.updated_at||null}:null;
 }
 
 function applyCloudData(row){
@@ -2018,17 +2032,16 @@ function hwClearDraft(){if(hwBusy||!hwDraft.length)return;if(!confirm("حذف ك
 /* ---------- رفع الصور للسحابة على دفعات ---------- */
 async function hwUploadChunk(id,images){
  let last;
- for(let a=0;a<3;a++){
+ for(let attempt=0;attempt<3;attempt++){
   try{
-   const r=await fetch(SYNC_URL+"?on_conflict=id",{method:"POST",headers:syncHeaders({"Content-Type":"application/json","Prefer":"resolution=merge-duplicates,return=minimal"}),body:JSON.stringify({id,data:{images},updated_at:new Date().toISOString()})});
-   if(r.ok)return;
-   let t="";try{t=(await r.text()).slice(0,300);}catch(e){}
-   last=new Error("HTTP "+r.status+" "+t);last.status=r.status;
-   if(r.status>=400&&r.status<500&&r.status!==408&&r.status!==429)break;   // خطأ دائم: لا فائدة من التكرار
-  }catch(e){last=e;}
-  await hwSleep(900*(a+1));
+   await gasPost({action:"image",id,images});
+   await hwSleep(900);
+   const check=await gasJsonp("image",{id});
+   if(check&&check.ok===true&&Array.isArray(check.images)&&check.images.length===images.length)return;
+   throw new Error("لم يتم تأكيد حفظ صور الواجب");
+  }catch(e){last=e;await hwSleep(900*(attempt+1));}
  }
- throw last;
+ throw last||new Error("فشل رفع صور الواجب");
 }
 function hwMakeChunks(images){
  const chunks=[];let cur=[],size=0;
@@ -2087,11 +2100,9 @@ function hwLoadChunk(c){
  if(HW_CHUNK_CACHE[c.id])return Promise.resolve(HW_CHUNK_CACHE[c.id]);
  if(HW_CHUNK_LOADING[c.id])return HW_CHUNK_LOADING[c.id];
  const p=(async()=>{
-  const r=await fetch(SYNC_URL+"?id=eq."+encodeURIComponent(c.id)+"&select=data",{headers:syncHeaders()});
-  if(!r.ok)throw new Error("HTTP "+r.status);
-  const rows=await r.json();
-  const imgs=rows[0]?.data?.images;
-  if(!Array.isArray(imgs))throw new Error("missing");
+  const result=await gasJsonp("image",{id:c.id});
+  const imgs=result&&result.images;
+  if(!result||result.ok!==true||!Array.isArray(imgs))throw new Error("تعذر تحميل صور الواجب");
   HW_CHUNK_CACHE[c.id]=imgs;return imgs;
  })();
  HW_CHUNK_LOADING[c.id]=p;
