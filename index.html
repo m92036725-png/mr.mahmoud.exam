@@ -1896,10 +1896,11 @@ setSyncStatus("المزامنة تعمل ✅");
 }
 }
 }catch(error){
-console.error(error);
+console.error("Mister Mahmoud Sync diagnostic:",error);
 syncReady=false;
-setSyncStatus("فشل الاتصال - جاري إعادة المحاولة");
-setTimeout(initializeSync,5000);
+const detail=(error&&error.message)?error.message:String(error||"خطأ غير معروف");
+setSyncStatus("فشل الاتصال: "+detail+" — إعادة المحاولة...");
+setTimeout(initializeSync,10000);
 return;
 }
 
